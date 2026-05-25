@@ -19,10 +19,18 @@ This repository is security-sensitive infrastructure for a local coding-agent sa
 - `AGENTS.md`
 - `config/apt-package-allowlist.txt`
 - `config/port-allowlist.txt`
+- `config/seccomp-workspace.json`
 - `scripts/agent-apt-install`
 - `scripts/agent-kill-port`
 - `scripts/validate_config.sh`
 - `scripts/security_check.sh`
+- `scripts/monitor-ports.sh`
+- `scripts/monitor-resources.sh`
+- `scripts/monitor-logs.sh`
+- `config/mcp-example.json`
+- `scripts/dashboard.py`
+- `scripts/dashboard-server.sh`
+- `scripts/mcp-bridge.py`
 
 ## Dependency Policy
 
@@ -30,6 +38,10 @@ This repository is security-sensitive infrastructure for a local coding-agent sa
 - Prefer official repositories and signed or checksum-verified artifacts.
 - Do not install npm or system packages at container startup.
 - Runtime apt installs must go through `sudo agent-apt-install` and the checked-in allowlist.
+
+## Security Variables
+
+When adding or modifying security hardening variables in `.env.example`, update `scripts/validate_config.sh` to validate them and `scripts/security_check.sh` to verify structural expectations.
 
 ## Secrets
 

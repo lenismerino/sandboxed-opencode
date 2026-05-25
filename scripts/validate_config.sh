@@ -65,6 +65,12 @@ validate_port_value APP_PORT "$APP_PORT"
 if [ -n "${LLM_PORT:-}" ]; then
   validate_port_value LLM_PORT "$LLM_PORT"
 fi
+if [ -n "${DASHBOARD_PORT:-}" ]; then
+  validate_port_value DASHBOARD_PORT "$DASHBOARD_PORT"
+fi
+if [ -n "${MCP_BRIDGE_PORT:-}" ]; then
+  validate_port_value MCP_BRIDGE_PORT "$MCP_BRIDGE_PORT"
+fi
 
 case "$LLM_SOURCE" in
   lm_studio)
@@ -123,6 +129,72 @@ if [ -f config/port-allowlist.txt ]; then
   if [ "$port_entries" != "$(printf '%s\n' "$port_entries" | sort -n -u)" ]; then
     echo "Error: config/port-allowlist.txt must be numerically sorted and deduplicated."
     exit 1
+  fi
+fi
+
+# --- Security hardening variable validation ---
+
+for bool_var in PORTSCAN_ENABLED RESOURCE_MONITOR_ENABLED AUTOLOG_ENABLED SECRET_SCAN_STRICT DASHBOARD_ENABLED; do
+  if [ -n "${!bool_var:-}" ] && [[ "${!bool_var}" != "true" && "${!bool_var}" != "false" ]]; then
+    echo "Error: ${bool_var} must be 'true' or 'false'."
+    exit 1
+  fi
+done
+
+if [ -n "${NETWORK_EGRESS:-}" ] && [[ "$NETWORK_EGRESS" != "restricted" && "$NETWORK_EGRESS" != "full" ]]; then
+  echo "Error: NETWORK_EGRESS must be 'restricted' or 'full'."
+  exit 1
+fi
+
+for int_var in ULIMIT_NOFILE ULIMIT_NPROC PORTSCAN_INTERVAL RESOURCE_MONITOR_INTERVAL DASHBOARD_REFRESH_INTERVAL; do
+  if [ -n "${!int_var:-}" ] && ! [[ "${!int_var}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "Error: ${int_var} must be a positive integer."
+    exit 1
+  fi
+done
+
+if [ -n "${SECCOMP_PROFILE:-}" ] && [ "$SECCOMP_PROFILE" != "unconfined" ] && [ ! -f "$SECCOMP_PROFILE" ]; then
+  echo "Error: SECCOMP_PROFILE file '${SECCOMP_PROFILE}' does not exist."
+  exit 1
+fi
+
+# --- Interface & operation mode validation ---
+
+if [ -n "${OPENCODE_INTERFACE:-}" ] && [[ "$OPENCODE_INTERFACE" != "web" && "$OPENCODE_INTERFACE" != "tui" ]]; then
+  echo "Error: OPENCODE_INTERFACE must be 'web' or 'tui'."
+  exit 1
+fi
+
+if [ -n "${OPERATION_MODE:-}" ] && [[ "$OPERATION_MODE" != "interactive" && "$OPERATION_MODE" != "autonomous" && "$OPERATION_MODE" != "conductor" ]]; then
+  echo "Error: OPERATION_MODE must be 'interactive', 'autonomous', or 'conductor'."
+  exit 1
+fi
+
+if [ "${OPERATION_MODE:-interactive}" = "autonomous" ] && [ -z "${TASK_FILE:-}" ]; then
+  echo "Error: TASK_FILE must be set when OPERATION_MODE=autonomous."
+  exit 1
+fi
+
+# --- Provider-specific validation ---
+
+if [ -n "${OLLAMA_NUM_GPU:-}" ] && ! [[ "${OLLAMA_NUM_GPU}" =~ ^[0-9]+$ ]]; then
+  echo "Error: OLLAMA_NUM_GPU must be a non-negative integer."
+  exit 1
+fi
+
+# --- MCP validation ---
+
+if [ -n "${MCP_CONFIG_FILE:-}" ] && [ ! -f "$MCP_CONFIG_FILE" ]; then
+  if [ ! -f "${PROJECTS_ROOT_PATH}/${PROJECT_NAME}/${MCP_CONFIG_FILE}" ] && \
+     [ ! -f "${SHARED_SYSTEM_PATH}/${MCP_CONFIG_FILE}" ]; then
+    echo "Warning: MCP_CONFIG_FILE '${MCP_CONFIG_FILE}' not found in repo, project, or shared paths."
+  fi
+fi
+
+if [ -f "$CONFIG_FILE" ]; then
+  env_perms=$(stat -c '%a' "$CONFIG_FILE" 2>/dev/null || stat -f '%Lp' "$CONFIG_FILE" 2>/dev/null || true)
+  if [ -n "$env_perms" ] && [ "$env_perms" != "600" ] && [ "$env_perms" != "400" ] && [ "$env_perms" != "640" ]; then
+    echo "Warning: ${CONFIG_FILE} has permissions ${env_perms}; consider restricting to 600."
   fi
 fi
 
