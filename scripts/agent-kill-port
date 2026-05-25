@@ -1,0 +1,20 @@
+#!/bin/bash
+set -Eeuo pipefail
+
+if [ "$#" -ne 1 ]; then
+  echo "Usage: sudo agent-kill-port <tcp-port>" >&2
+  exit 2
+fi
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Error: agent-kill-port must run through sudo." >&2
+  exit 1
+fi
+
+port="$1"
+if [[ ! "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1024 ] || [ "$port" -gt 65535 ]; then
+  echo "Error: port must be an integer from 1024 to 65535." >&2
+  exit 1
+fi
+
+fuser -k "${port}/tcp" || true
