@@ -1,0 +1,80 @@
+services:
+  workspace:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - PYTHON_BASE_IMAGE=${PYTHON_BASE_IMAGE:-python:3.13.13-slim-bookworm}
+        - UV_IMAGE=${UV_IMAGE:-ghcr.io/astral-sh/uv:0.11.16}
+        - HOST_UID=${HOST_UID:-501}
+        - HOST_GID=${HOST_GID:-20}
+        - NODE_MAJOR=${NODE_MAJOR:-22}
+        - NODE_VERSION=${NODE_VERSION:-22.22.2-1nodesource1}
+        - OPENCODE_VERSION=${OPENCODE_VERSION:-0.6.6}
+        - GH_VERSION=${GH_VERSION:-2.92.0}
+        - GH_AMD64_SHA256=${GH_AMD64_SHA256:-8f8212b1a9cec261a8839e0893168f50d3fc70f095da257feef4229234cefdf8}
+        - GH_ARM64_SHA256=${GH_ARM64_SHA256:-34d620b7c884774ed86236541535170889fda0b99aafbdab8b69c7d458b5ca6b}
+    container_name: opencode-workspace
+    hostname: sandbox
+    user: "${HOST_UID}:${HOST_GID}"
+    init: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - SETGID
+      - SETUID
+    pids_limit: 512
+    mem_limit: ${WORKSPACE_MEMORY_LIMIT:-8g}
+    cpus: ${WORKSPACE_CPUS:-4}
+    ports:
+      - "127.0.0.1:${OPENCODE_PORT:-3000}:${OPENCODE_PORT:-3000}"
+      # Expose one pre-allocated port for agent-built web apps (Gradio/FastAPI).
+      - "127.0.0.1:${APP_PORT:-7860}:${APP_PORT:-7860}"
+    volumes:
+      - ${PROJECTS_ROOT_PATH}/${ACTIVE_PROJECT:-default_project}:/home/agent/projects
+      - ${SHARED_SYSTEM_PATH}:/home/agent/shared:ro
+      - ${TEMP_PATH}:/home/agent/temp
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - HOME=/home/agent
+      - XDG_CACHE_HOME=/home/agent/temp/cache
+      - UV_CACHE_DIR=/home/agent/temp/uv_cache
+      - RUFF_CACHE_DIR=/home/agent/temp/ruff_cache
+      - MYPY_CACHE_DIR=/home/agent/temp/mypy_cache
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - agent_network
+    restart: unless-stopped
+
+  llm-backend:
+    image: ollama/ollama:${OLLAMA_IMAGE_TAG:-0.23.1}
+    container_name: opencode-llm
+    profiles:
+      - local-llm
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    ports:
+      - "127.0.0.1:${LLM_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - agent_network
+    restart: unless-stopped
+
+networks:
+  agent_network:
+    driver: bridge
+
+volumes:
+  ollama_data:
