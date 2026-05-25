@@ -1,0 +1,7 @@
+{
+  "filesystem": {
+    "type": "local",
+    "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/home/agent/projects"],
+    "enabled": true
+  }
+}

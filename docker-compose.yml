@@ -10,7 +10,7 @@ services:
         - HOST_GID=${HOST_GID:-20}
         - NODE_MAJOR=${NODE_MAJOR:-22}
         - NODE_VERSION=${NODE_VERSION:-22.22.2-1nodesource1}
-        - OPENCODE_VERSION=${OPENCODE_VERSION:-0.6.6}
+        - OPENCODE_VERSION=${OPENCODE_VERSION:-1.15.10}
         - GH_VERSION=${GH_VERSION:-2.92.0}
         - GH_AMD64_SHA256=${GH_AMD64_SHA256:-8f8212b1a9cec261a8839e0893168f50d3fc70f095da257feef4229234cefdf8}
         - GH_ARM64_SHA256=${GH_ARM64_SHA256:-34d620b7c884774ed86236541535170889fda0b99aafbdab8b69c7d458b5ca6b}
@@ -18,6 +18,7 @@ services:
     hostname: sandbox
     user: "${HOST_UID}:${HOST_GID}"
     init: true
+    read_only: true
     cap_drop:
       - ALL
     cap_add:
@@ -27,31 +28,87 @@ services:
       - KILL
       - SETGID
       - SETUID
+    security_opt:
+      - seccomp=${SECCOMP_PROFILE:-./config/seccomp-workspace.json}
     pids_limit: 512
     mem_limit: ${WORKSPACE_MEMORY_LIMIT:-8g}
     cpus: ${WORKSPACE_CPUS:-4}
+    ulimits:
+      nofile:
+        soft: ${ULIMIT_NOFILE:-4096}
+        hard: ${ULIMIT_NOFILE:-8192}
+      nproc:
+        soft: ${ULIMIT_NPROC:-256}
+        hard: ${ULIMIT_NPROC:-512}
+      core:
+        soft: 0
+        hard: 0
     ports:
       - "127.0.0.1:${OPENCODE_PORT:-3000}:${OPENCODE_PORT:-3000}"
-      # Expose one pre-allocated port for agent-built web apps (Gradio/FastAPI).
       - "127.0.0.1:${APP_PORT:-7860}:${APP_PORT:-7860}"
+      - "127.0.0.1:${DASHBOARD_PORT:-8080}:${DASHBOARD_PORT:-8080}"
+      - "127.0.0.1:${MCP_BRIDGE_PORT:-8443}:${MCP_BRIDGE_PORT:-8443}"
     volumes:
       - ${PROJECTS_ROOT_PATH}/${ACTIVE_PROJECT:-default_project}:/home/agent/projects
       - ${SHARED_SYSTEM_PATH}:/home/agent/shared:ro
       - ${TEMP_PATH}:/home/agent/temp
-    env_file:
-      - path: .env
-        required: false
+    tmpfs:
+      - /tmp:size=512M,noexec,nodev,nosuid
+      - /var/tmp:size=128M,noexec,nodev,nosuid
+      - /home/agent/.config:size=64M
+      - /home/agent/.cache:size=256M
+      - /home/agent/.local:size=128M
+      - /run:size=64M
+      - /var/lib/apt:size=256M
+      - /var/cache/apt:size=256M
     environment:
       - HOME=/home/agent
       - XDG_CACHE_HOME=/home/agent/temp/cache
       - UV_CACHE_DIR=/home/agent/temp/uv_cache
       - RUFF_CACHE_DIR=/home/agent/temp/ruff_cache
       - MYPY_CACHE_DIR=/home/agent/temp/mypy_cache
+      - LLM_SOURCE=${LLM_SOURCE}
+      - LM_STUDIO_MODEL=${LM_STUDIO_MODEL:-}
+      - FASTFLOW_MODEL=${FASTFLOW_MODEL:-}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-}
+      - LLM_PORT=${LLM_PORT:-1234}
+      - OPENCODE_PORT=${OPENCODE_PORT:-3000}
+      - APP_PORT=${APP_PORT:-7860}
+      - GIT_USERNAME=${GIT_USERNAME:-Agent Coder}
+      - GIT_EMAIL=${GIT_EMAIL:-agent@sandboxed.local}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - GH_TOKEN=${GH_TOKEN:-}
+      - PORTSCAN_ENABLED=${PORTSCAN_ENABLED:-false}
+      - PORTSCAN_INTERVAL=${PORTSCAN_INTERVAL:-300}
+      - RESOURCE_MONITOR_ENABLED=${RESOURCE_MONITOR_ENABLED:-false}
+      - RESOURCE_MONITOR_INTERVAL=${RESOURCE_MONITOR_INTERVAL:-60}
+      - AUTOLOG_ENABLED=${AUTOLOG_ENABLED:-false}
+      - LM_STUDIO_API_KEY=${LM_STUDIO_API_KEY:-}
+      - OPENCODE_INTERFACE=${OPENCODE_INTERFACE:-web}
+      - OPERATION_MODE=${OPERATION_MODE:-interactive}
+      - TASK_FILE=${TASK_FILE:-}
+      - MCP_CONFIG_FILE=${MCP_CONFIG_FILE:-}
+      - MCP_BRIDGE_PORT=${MCP_BRIDGE_PORT:-8443}
+      - PROJECT_NAME=${PROJECT_NAME:-default_project}
+      - DASHBOARD_ENABLED=${DASHBOARD_ENABLED:-false}
+      - DASHBOARD_PORT=${DASHBOARD_PORT:-8080}
+      - DASHBOARD_REFRESH_INTERVAL=${DASHBOARD_REFRESH_INTERVAL:-30}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - agent_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:${OPENCODE_PORT:-3000}/"]
+      interval: ${HEALTHCHECK_INTERVAL:-30s}
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "${LOG_MAX_SIZE:-50m}"
+        max-file: "${LOG_MAX_FILE:-5}"
 
   llm-backend:
     image: ollama/ollama:${OLLAMA_IMAGE_TAG:-0.23.1}
@@ -64,6 +121,9 @@ services:
     security_opt:
       - no-new-privileges:true
     pids_limit: 512
+    environment:
+      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-5m}
+      - OLLAMA_NUM_GPU=${OLLAMA_NUM_GPU:-999}
     ports:
       - "127.0.0.1:${LLM_PORT:-11434}:11434"
     volumes:
@@ -71,10 +131,24 @@ services:
     networks:
       - agent_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:11434/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "${LOG_MAX_SIZE:-50m}"
+        max-file: "${LOG_MAX_FILE:-5}"
 
 networks:
   agent_network:
     driver: bridge
+  agent_network_restricted:
+    driver: bridge
+    internal: true
 
 volumes:
   ollama_data:
