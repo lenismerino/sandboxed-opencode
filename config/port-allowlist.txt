@@ -1,0 +1,11 @@
+# Host/container ports that this sandbox may expose.
+# Keep this list short. Additions should be reviewed as security changes.
+1234
+3000
+7860
+8000
+8080
+8443
+8888
+11434
+52625
