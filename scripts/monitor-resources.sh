@@ -21,6 +21,11 @@ while true; do
     swap_free="$(awk '/^SwapFree:/ {print $2}' /proc/meminfo)"
   fi
 
+  [[ ! "$mem_total" =~ ^[0-9]+$ ]] && mem_total=0
+  [[ ! "$mem_available" =~ ^[0-9]+$ ]] && mem_available=0
+  [[ ! "$swap_total" =~ ^[0-9]+$ ]] && swap_total=0
+  [[ ! "$swap_free" =~ ^[0-9]+$ ]] && swap_free=0
+
   if [ "$mem_total" -gt 0 ] 2>/dev/null; then
     mem_used_pct="$(awk "BEGIN {printf \"%.1f\", (($mem_total - $mem_available) / $mem_total) * 100}")"
   else
@@ -31,14 +36,18 @@ while true; do
 
   top_procs="[]"
   while IFS= read -r line; do
+    [ -z "$line" ] && continue
     user="$(echo "$line" | awk '{print $1}')"
     pid="$(echo "$line" | awk '{print $2}')"
     cpu="$(echo "$line" | awk '{print $3}')"
     mem="$(echo "$line" | awk '{print $4}')"
     cmd="$(echo "$line" | awk '{for(i=11;i<=NF;i++) printf "%s ", $i; print ""}'| sed 's/ $//')"
-    top_procs="$(echo "$top_procs" | jq \
-      --arg u "$user" --arg p "$pid" --arg c "$cpu" --arg m "$mem" --arg cm "$cmd" \
-      '. + [{"user":$u,"pid":($p|tonumber),"cpu":($c|tonumber),"mem":($m|tonumber),"command":$cm}]')"
+    
+    if [[ "$pid" =~ ^[0-9]+$ ]]; then
+      top_procs="$(echo "$top_procs" | jq \
+        --arg u "$user" --arg p "$pid" --arg c "$cpu" --arg m "$mem" --arg cm "$cmd" \
+        '. + [{"user":$u,"pid":($p|tonumber),"cpu":($c|tonumber),"mem":($m|tonumber),"command":$cm}]')"
+    fi
   done <<< "$(ps aux --sort=-%mem 2>/dev/null | tail -n +2 | head -10)"
 
   jq -cn \

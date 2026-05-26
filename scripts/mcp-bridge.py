@@ -130,6 +130,8 @@ def _opencode_request(method: str, path: str, body: dict | None = None) -> dict:
     except urllib.error.HTTPError as e:
         error_body = e.read().decode() if e.fp else ""
         raise RuntimeError(f"OpenCode API {method} {path} returned {e.code}: {error_body}")
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Failed to connect to OpenCode API at {url}: {e.reason}")
 
 
 def _opencode_get(path: str) -> dict:

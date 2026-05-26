@@ -21,6 +21,9 @@ while true; do
     mem_available="$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)"
   fi
 
+  [[ ! "$mem_total" =~ ^[0-9]+$ ]] && mem_total=0
+  [[ ! "$mem_available" =~ ^[0-9]+$ ]] && mem_available=0
+
   portscan_warnings=0
   resource_snapshots=0
   if [ -f "${LOG_DIR}/portscan.jsonl" ]; then
@@ -29,6 +32,9 @@ while true; do
   if [ -f "${LOG_DIR}/resources.jsonl" ]; then
     resource_snapshots="$(wc -l < "${LOG_DIR}/resources.jsonl" 2>/dev/null || echo 0)"
   fi
+
+  [[ ! "$portscan_warnings" =~ ^[0-9]+$ ]] && portscan_warnings=0
+  [[ ! "$resource_snapshots" =~ ^[0-9]+$ ]] && resource_snapshots=0
 
   listeners_json="[]"
   while IFS= read -r line; do

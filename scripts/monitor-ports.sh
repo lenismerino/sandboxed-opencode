@@ -6,6 +6,14 @@ readonly LOG_FILE="${LOG_DIR}/portscan.jsonl"
 readonly INTERVAL="${PORTSCAN_INTERVAL:-300}"
 
 expected_ports="${OPENCODE_PORT:-3000}|${APP_PORT:-7860}"
+if [ "${OPERATION_MODE:-}" = "conductor" ]; then
+  expected_ports="${expected_ports}|4096|${MCP_BRIDGE_PORT:-8443}"
+fi
+if [ "${DASHBOARD_ENABLED:-false}" = "true" ]; then
+  expected_ports="${expected_ports}|${DASHBOARD_PORT:-8080}"
+fi
+
+expected_json_array="$(echo "$expected_ports" | jq -c -R 'split("|")')"
 
 mkdir -p "$LOG_DIR"
 
@@ -14,8 +22,10 @@ while true; do
 
   listeners="$(ss -tlnp 2>/dev/null | tail -n +2 || true)"
   if [ -z "$listeners" ]; then
-    printf '{"timestamp":"%s","status":"ok","expected_ports":["%s","%s"],"unexpected":[]}\n' \
-      "$timestamp" "${OPENCODE_PORT:-3000}" "${APP_PORT:-7860}" >> "$LOG_FILE"
+    jq -n \
+      --arg ts "$timestamp" \
+      --argjson ep "$expected_json_array" \
+      '{timestamp: $ts, status: "ok", expected_ports: $ep, unexpected: []}' >> "$LOG_FILE"
     sleep "$INTERVAL"
     continue
   fi
@@ -23,6 +33,7 @@ while true; do
   unexpected_json="[]"
   has_unexpected=false
   while IFS= read -r line; do
+    [ -z "$line" ] && continue
     port="$(echo "$line" | awk '{print $4}' | rev | cut -d: -f1 | rev)"
     if ! echo "$port" | grep -qE "^(${expected_ports})$"; then
       addr="$(echo "$line" | awk '{print $4}')"
@@ -41,10 +52,9 @@ while true; do
   jq -cn \
     --arg ts "$timestamp" \
     --arg st "$status" \
-    --arg ep1 "${OPENCODE_PORT:-3000}" \
-    --arg ep2 "${APP_PORT:-7860}" \
+    --argjson ep "$expected_json_array" \
     --argjson unexp "$unexpected_json" \
-    '{timestamp: $ts, status: $st, expected_ports: [$ep1, $ep2], unexpected: $unexp}' >> "$LOG_FILE"
+    '{timestamp: $ts, status: $st, expected_ports: $ep, unexpected: $unexp}' >> "$LOG_FILE"
 
   sleep "$INTERVAL"
 done

@@ -86,10 +86,13 @@ if [ -n "${MCP_CONFIG_FILE:-}" ]; then
   fi
 
   if [ -f "$mcp_path" ]; then
-    jq --slurpfile mcp "$mcp_path" '.mcp = $mcp[0]' \
-      /home/agent/.config/opencode/opencode.json > /tmp/opencode-merged.json
-    mv /tmp/opencode-merged.json /home/agent/.config/opencode/opencode.json
-    echo "MCP configuration loaded from ${mcp_path}"
+    if jq --slurpfile mcp "$mcp_path" '.mcp = $mcp[0]' \
+      /home/agent/.config/opencode/opencode.json > /tmp/opencode-merged.json 2>/dev/null; then
+      mv /tmp/opencode-merged.json /home/agent/.config/opencode/opencode.json
+      echo "MCP configuration loaded from ${mcp_path}"
+    else
+      echo "Warning: MCP_CONFIG_FILE '${mcp_path}' contains invalid JSON or could not be merged."
+    fi
   else
     echo "Warning: MCP_CONFIG_FILE '${MCP_CONFIG_FILE}' not found."
   fi
