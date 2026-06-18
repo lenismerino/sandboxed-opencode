@@ -124,7 +124,8 @@ COPY --chown=agent scripts/monitor-logs.sh /home/agent/app/monitor-logs.sh
 COPY --chown=agent scripts/dashboard.py /home/agent/app/dashboard.py
 COPY --chown=agent scripts/dashboard-server.sh /home/agent/app/dashboard-server.sh
 COPY --chown=agent scripts/mcp-bridge.py /home/agent/app/mcp-bridge.py
-RUN chmod +x /home/agent/app/entrypoint.sh /home/agent/app/monitor-*.sh /home/agent/app/dashboard-server.sh
+COPY --chown=agent scripts/crystallize_skill.py /home/agent/app/crystallize_skill.py
+RUN chmod +x /home/agent/app/entrypoint.sh /home/agent/app/monitor-*.sh /home/agent/app/dashboard-server.sh /home/agent/app/crystallize_skill.py
 
 # 7. Lock down the container to the non-root user
 USER agent

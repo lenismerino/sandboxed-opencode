@@ -355,3 +355,11 @@ Generated projects include a `logs/` directory for application logs. The root `l
 ## Skills
 
 Place Markdown files in `skills/` to provide reusable task-specific guidance. During project initialization, the root `skills/` directory is copied into the generated project, and `AGENTS.md` instructs the agent to read relevant skill files at the start of a development cycle.
+
+To automatically extract and save a new skill from a successful coding session, run the skill crystallization script inside the running container:
+
+```bash
+docker exec -it opencode-workspace python3 /home/agent/app/crystallize_skill.py <skill_name>
+```
+
+This gathers recent development logs and git history, prompts the local LLM to distill the workflow, and saves a reusable Markdown skill template directly into `skills/<skill_name>.md` for future use.
