@@ -19,6 +19,7 @@ import urllib.request
 import urllib.error
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Lock
+from pathlib import Path
 
 OPENCODE_URL = "http://127.0.0.1:4096"
 BRIDGE_PORT = int(os.environ.get("MCP_BRIDGE_PORT", "8443"))
@@ -90,6 +91,43 @@ TOOLS = [
         "name": "abort_task",
         "description": "Abort the currently running task in the local coding agent.",
         "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "write_project_file",
+        "description": "Write or overwrite a file in the project directory.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "File path relative to the project root.",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "The exact text content to write to the file.",
+                },
+            },
+            "required": ["path", "content"],
+        },
+    },
+    {
+        "name": "get_project_diff",
+        "description": "Get the current unstaged and staged git changes (git diff).",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "run_project_command",
+        "description": "Execute a non-interactive shell command inside the project directory (e.g. running tests, linters, or builds).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "The shell command to execute.",
+                },
+            },
+            "required": ["command"],
+        },
     },
 ]
 
@@ -231,12 +269,66 @@ def tool_abort_task(arguments: dict) -> str:
         return f"Error aborting: {e}"
 
 
+def tool_write_project_file(arguments: dict) -> str:
+    path = arguments.get("path", "")
+    content = arguments.get("content", "")
+    if not path:
+        return "Error: path is required."
+    try:
+        target_path = (Path(PROJECT_DIR) / path).resolve()
+        if not str(target_path).startswith(str(PROJECT_DIR)):
+            return "Error: path traversal detected."
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(content, encoding="utf-8")
+        return f"Successfully wrote {len(content)} bytes to {path}"
+    except Exception as e:
+        return f"Error writing file: {e}"
+
+
+def tool_get_project_diff(arguments: dict) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "diff", "HEAD"],
+            capture_output=True, text=True, timeout=15,
+            cwd=PROJECT_DIR,
+        )
+        return result.stdout.strip() or "(no changes)"
+    except Exception as e:
+        return f"Error getting git diff: {e}"
+
+
+def tool_run_project_command(arguments: dict) -> str:
+    command = arguments.get("command", "")
+    if not command:
+        return "Error: command is required."
+    try:
+        result = subprocess.run(
+            ["/bin/bash", "-c", command],
+            capture_output=True, text=True, timeout=60,
+            cwd=PROJECT_DIR,
+        )
+        output = []
+        if result.stdout:
+            output.append(f"STDOUT:\n{result.stdout}")
+        if result.stderr:
+            output.append(f"STDERR:\n{result.stderr}")
+        output_str = "\n".join(output).strip() or "(no output)"
+        return f"Command exited with code {result.returncode}\n\n{output_str}"
+    except subprocess.TimeoutExpired:
+        return "Error: command timed out after 60 seconds."
+    except Exception as e:
+        return f"Error executing command: {e}"
+
+
 TOOL_HANDLERS = {
     "delegate_task": tool_delegate_task,
     "read_project_file": tool_read_project_file,
     "list_project_files": tool_list_project_files,
     "get_project_status": tool_get_project_status,
     "abort_task": tool_abort_task,
+    "write_project_file": tool_write_project_file,
+    "get_project_diff": tool_get_project_diff,
+    "run_project_command": tool_run_project_command,
 }
 
 

@@ -25,9 +25,11 @@ A frontier AI coding agent (e.g., Claude Code, Gemini CLI, Codex, Antigravity) a
 
 In this mode:
 - Execute each instruction as received. Do not ask clarifying questions — the external agent handles planning.
-- Focus on writing correct, working code. The external agent will review and request fixes.
+- Work in small, incremental chunks. Do not rewrite unrelated files or perform large refactorings unless explicitly requested.
+- Focus on writing correct, type-hinted, and robust code. Do not hallucinate classes, functions, or imports.
+- Perform strict self-verification. Run tests, linters, or builders (e.g., `pytest`, `ruff check`, `mypy`) immediately after writing or modifying code to verify correctness before reporting back.
+- Keep responses short, factual, and structured: list files modified, test/lint outcomes, and any specific compiler or test failures encountered.
 - Use the write tool for creating files when the edit tool fails on complex changes.
-- Keep responses concise — summarize what you did and any issues encountered.
 
 You must be fully self-directed:
 
