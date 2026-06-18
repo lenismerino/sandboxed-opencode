@@ -295,7 +295,33 @@ def handle_jsonrpc(request: dict) -> dict | None:
 
 
 class MCPHandler(BaseHTTPRequestHandler):
+    def check_csrf(self) -> bool:
+        host = self.headers.get("Host", "")
+        allowed_hosts = {
+            f"localhost:{BRIDGE_PORT}",
+            f"127.0.0.1:{BRIDGE_PORT}",
+            "localhost",
+            "127.0.0.1",
+        }
+        if host not in allowed_hosts:
+            self.send_error(400, "Bad Request: Invalid Host header")
+            return False
+
+        origin = self.headers.get("Origin")
+        if origin:
+            allowed_origins = {
+                f"http://localhost:{BRIDGE_PORT}",
+                f"http://127.0.0.1:{BRIDGE_PORT}",
+            }
+            if origin not in allowed_origins:
+                self.send_error(403, "Forbidden: Cross-Origin Request Blocked")
+                return False
+        return True
+
     def do_POST(self) -> None:
+        if not self.check_csrf():
+            return
+
         if self.path != "/mcp":
             self.send_error(404)
             return
@@ -324,6 +350,9 @@ class MCPHandler(BaseHTTPRequestHandler):
         self.wfile.write(response_bytes)
 
     def do_GET(self) -> None:
+        if not self.check_csrf():
+            return
+
         if self.path == "/health":
             body = json.dumps({"healthy": True, "server": SERVER_INFO}).encode()
             self.send_response(200)
