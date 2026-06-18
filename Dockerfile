@@ -1,5 +1,5 @@
 ARG PYTHON_BASE_IMAGE=python:3.13.13-slim-bookworm
-ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.11.16
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.11.21
 
 FROM ${UV_IMAGE} AS uv_source
 
@@ -13,7 +13,7 @@ ARG HOST_UID=1000
 ARG HOST_GID=1000
 ARG NODE_MAJOR=22
 ARG NODE_VERSION=22.22.2-1nodesource1
-ARG OPENCODE_VERSION=1.15.10
+ARG OPENCODE_VERSION=1.17.8
 ARG GH_VERSION=2.92.0
 ARG GH_AMD64_SHA256=8f8212b1a9cec261a8839e0893168f50d3fc70f095da257feef4229234cefdf8
 ARG GH_ARM64_SHA256=34d620b7c884774ed86236541535170889fda0b99aafbdab8b69c7d458b5ca6b
@@ -124,7 +124,8 @@ COPY --chown=agent scripts/monitor-logs.sh /home/agent/app/monitor-logs.sh
 COPY --chown=agent scripts/dashboard.py /home/agent/app/dashboard.py
 COPY --chown=agent scripts/dashboard-server.sh /home/agent/app/dashboard-server.sh
 COPY --chown=agent scripts/mcp-bridge.py /home/agent/app/mcp-bridge.py
-RUN chmod +x /home/agent/app/entrypoint.sh /home/agent/app/monitor-*.sh /home/agent/app/dashboard-server.sh
+COPY --chown=agent scripts/crystallize_skill.py /home/agent/app/crystallize_skill.py
+RUN chmod +x /home/agent/app/entrypoint.sh /home/agent/app/monitor-*.sh /home/agent/app/dashboard-server.sh /home/agent/app/crystallize_skill.py
 
 # 7. Lock down the container to the non-root user
 USER agent

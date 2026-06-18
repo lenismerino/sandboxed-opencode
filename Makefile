@@ -16,9 +16,9 @@ check:
 
 versions:
 	@echo "Python base: $${PYTHON_BASE_IMAGE:-python:3.13.13-slim-bookworm}"
-	@echo "uv image: $${UV_IMAGE:-ghcr.io/astral-sh/uv:0.11.16}"
+	@echo "uv image: $${UV_IMAGE:-ghcr.io/astral-sh/uv:0.11.21}"
 	@echo "Node package: $${NODE_VERSION:-22.22.2-1nodesource1}"
-	@echo "OpenCode: $${OPENCODE_VERSION:-1.15.10}"
+	@echo "OpenCode: $${OPENCODE_VERSION:-1.17.8}"
 	@echo "GitHub CLI: $${GH_VERSION:-2.92.0}"
 	@echo "Ollama image tag: $${OLLAMA_IMAGE_TAG:-0.23.1}"
 
@@ -76,9 +76,7 @@ run-restricted: validate setup
 	@if [ -z "$(PROJECT_NAME)" ]; then echo "Error: PROJECT_NAME is not set in .env."; exit 1; fi
 	@./new_project.sh
 	@echo "Starting in restricted network mode (no internet egress)..."
-	ACTIVE_PROJECT=$(PROJECT_NAME) docker compose up -d --build
-	@docker network disconnect sandboxed-opencode_agent_network opencode-workspace 2>/dev/null || true
-	@docker network connect sandboxed-opencode_agent_network_restricted opencode-workspace 2>/dev/null || true
+	WORKSPACE_NETWORK=agent_network_restricted ACTIVE_PROJECT=$(PROJECT_NAME) docker compose up -d --build
 	@echo "Workspace is on the restricted (internal) network."
 
 stop:

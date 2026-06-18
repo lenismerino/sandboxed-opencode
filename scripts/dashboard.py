@@ -8,7 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 LOG_DIR = Path(os.environ.get("LOG_DIR", "/home/agent/projects/logs"))
-OUTPUT = LOG_DIR / "dashboard.html"
+PUBLIC_DIR = Path(os.environ.get("DASHBOARD_PUBLIC_DIR", "/tmp/dashboard-public"))
+OUTPUT = PUBLIC_DIR / "index.html"
 
 PROJECT_NAME = os.environ.get("PROJECT_NAME", "unknown")
 LLM_SOURCE = os.environ.get("LLM_SOURCE", "unknown")
@@ -302,7 +303,7 @@ def main() -> None:
 
     html = build_html(resources, portscan, summaries)
 
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(html)
 
 

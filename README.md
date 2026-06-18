@@ -316,9 +316,9 @@ The Dockerfile exposes build args:
 
 - `NODE_MAJOR`, default `22`
 - `NODE_VERSION`, default `22.22.2-1nodesource1`
-- `OPENCODE_VERSION`, default `1.15.10`
+- `OPENCODE_VERSION`, default `1.17.8`
 - `GH_VERSION`, default `2.92.0`
-- `UV_IMAGE`, default `ghcr.io/astral-sh/uv:0.11.16`
+- `UV_IMAGE`, default `ghcr.io/astral-sh/uv:0.11.21`
 - `PYTHON_BASE_IMAGE`, default `python:3.13.13-slim-bookworm`
 - `HOST_UID`, `HOST_GID`
 
@@ -355,3 +355,11 @@ Generated projects include a `logs/` directory for application logs. The root `l
 ## Skills
 
 Place Markdown files in `skills/` to provide reusable task-specific guidance. During project initialization, the root `skills/` directory is copied into the generated project, and `AGENTS.md` instructs the agent to read relevant skill files at the start of a development cycle.
+
+To automatically extract and save a new skill from a successful coding session, run the skill crystallization script inside the running container:
+
+```bash
+docker exec -it opencode-workspace python3 /home/agent/app/crystallize_skill.py <skill_name>
+```
+
+This gathers recent development logs and git history, prompts the local LLM to distill the workflow, and saves a reusable Markdown skill template directly into `skills/<skill_name>.md` for future use.

@@ -19,6 +19,7 @@ import urllib.request
 import urllib.error
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Lock
+from pathlib import Path
 
 OPENCODE_URL = "http://127.0.0.1:4096"
 BRIDGE_PORT = int(os.environ.get("MCP_BRIDGE_PORT", "8443"))
@@ -91,6 +92,127 @@ TOOLS = [
         "description": "Abort the currently running task in the local coding agent.",
         "inputSchema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "write_project_file",
+        "description": "Write or overwrite a file in the project directory.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "File path relative to the project root.",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "The exact text content to write to the file.",
+                },
+            },
+            "required": ["path", "content"],
+        },
+    },
+    {
+        "name": "get_project_diff",
+        "description": "Get the current unstaged and staged git changes (git diff).",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "run_project_command",
+        "description": "Execute a non-interactive shell command inside the project directory (e.g. running tests, linters, or builds).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "The shell command to execute.",
+                },
+            },
+            "required": ["command"],
+        },
+    },
+    {
+        "name": "grep_search",
+        "description": "Search for a pattern/string across files recursively using ripgrep.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The search term or regular expression pattern.",
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Optional subdirectory path relative to project root to limit the search. Defaults to '.'",
+                    "default": ".",
+                },
+                "case_sensitive": {
+                    "type": "boolean",
+                    "description": "Optional flag for case-sensitive match. Defaults to false.",
+                    "default": false,
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "patch_project_file",
+        "description": "Replace a unique block of text inside a file with a new block.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "File path relative to the project root.",
+                },
+                "find_text": {
+                    "type": "string",
+                    "description": "The exact block of text to replace. Must be unique in the file.",
+                },
+                "replace_text": {
+                    "type": "string",
+                    "description": "The new content to replace find_text with.",
+                },
+            },
+            "required": ["path", "find_text", "replace_text"],
+        },
+    },
+    {
+        "name": "crystallize_skill",
+        "description": "Distill a repeatable workflow from git and logs into a reusable skill Markdown file.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "skill_name": {
+                    "type": "string",
+                    "description": "The name of the skill to crystallize.",
+                },
+            },
+            "required": ["skill_name"],
+        },
+    },
+    {
+        "name": "read_project_log",
+        "description": "Read recent lines from log files inside projects/logs.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "log_file": {
+                    "type": "string",
+                    "description": "The log filename (e.g. autonomous.log). Defaults to 'autonomous.log'.",
+                    "default": "autonomous.log",
+                },
+                "lines": {
+                    "type": "integer",
+                    "description": "Number of lines from the end to read. Defaults to 50.",
+                    "default": 50,
+                },
+            },
+        },
+    },
+    {
+        "name": "list_skills",
+        "description": "List all crystallized skills in the project with descriptions.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
 ]
 
 
@@ -138,15 +260,41 @@ def _opencode_get(path: str) -> dict:
     return _opencode_request("GET", path)
 
 
+def _safe_resolve_path(path_str: str) -> Path | None:
+    """Safely resolve a path relative to the project directory to prevent traversal."""
+    try:
+        proj_path = Path(PROJECT_DIR).resolve()
+        target_path = (proj_path / path_str).resolve()
+        if target_path.is_relative_to(proj_path):
+            return target_path
+    except Exception:
+        pass
+    return None
+
+
+CONDUCTOR_REMINDER = (
+    "[SYSTEM REMINDER] You are operating in CONDUCTOR MODE. Follow these rules strictly:\n"
+    "1. Work in small, atomic, and incremental changes. Do not rewrite unrelated code.\n"
+    "2. Perform self-verification: run formatters, linters, and tests immediately after writing code.\n"
+    "3. No hallucinations: double-check existing file contents before writing code, and verify all imports exist.\n"
+    "4. Keep your response short and structured: list modified files, test/lint results, and specific failures if any.\n"
+    "5. Avoid conversational fluff. Do not explain unrelated concepts.\n"
+    "--- USER INSTRUCTION ---\n"
+)
+
+
 def tool_delegate_task(arguments: dict) -> str:
     instructions = arguments.get("instructions", "")
     if not instructions:
         return "Error: instructions cannot be empty."
 
+    # Prepend the system reminder to instructions to keep the local model focused
+    reminded_instructions = f"{CONDUCTOR_REMINDER}{instructions}"
+
     sid = session_mgr.get_or_create_session()
 
     message_body = {
-        "parts": [{"type": "text", "text": instructions}],
+        "parts": [{"type": "text", "text": reminded_instructions}],
     }
 
     try:
@@ -169,6 +317,8 @@ def tool_read_project_file(arguments: dict) -> str:
     path = arguments.get("path", "")
     if not path:
         return "Error: path is required."
+    if not _safe_resolve_path(path):
+        return "Error: path traversal detected."
     try:
         resp = _opencode_get(f"/file/content?path={urllib.request.quote(path)}")
         return resp.get("content", json.dumps(resp))
@@ -180,6 +330,8 @@ def tool_list_project_files(arguments: dict) -> str:
     path = arguments.get("path", ".")
     pattern = arguments.get("pattern")
 
+    if not _safe_resolve_path(path):
+        return "Error: path traversal detected."
     try:
         if pattern:
             resp = _opencode_get(f"/find/file?query={urllib.request.quote(pattern)}")
@@ -231,12 +383,204 @@ def tool_abort_task(arguments: dict) -> str:
         return f"Error aborting: {e}"
 
 
+def tool_write_project_file(arguments: dict) -> str:
+    path = arguments.get("path", "")
+    content = arguments.get("content", "")
+    if not path:
+        return "Error: path is required."
+    target_path = _safe_resolve_path(path)
+    if not target_path:
+        return "Error: path traversal detected."
+    try:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(content, encoding="utf-8")
+        return f"Successfully wrote {len(content)} bytes to {path}"
+    except Exception as e:
+        return f"Error writing file: {e}"
+
+
+def tool_get_project_diff(arguments: dict) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "diff", "HEAD"],
+            capture_output=True, text=True, timeout=15,
+            cwd=PROJECT_DIR,
+        )
+        return result.stdout.strip() or "(no changes)"
+    except Exception as e:
+        return f"Error getting git diff: {e}"
+
+
+def tool_run_project_command(arguments: dict) -> str:
+    command = arguments.get("command", "")
+    if not command:
+        return "Error: command is required."
+    try:
+        result = subprocess.run(
+            ["/bin/bash", "-c", command],
+            capture_output=True, text=True, timeout=60,
+            cwd=PROJECT_DIR,
+        )
+        output = []
+        if result.stdout:
+            output.append(f"STDOUT:\n{result.stdout}")
+        if result.stderr:
+            output.append(f"STDERR:\n{result.stderr}")
+        output_str = "\n".join(output).strip() or "(no output)"
+        return f"Command exited with code {result.returncode}\n\n{output_str}"
+    except subprocess.TimeoutExpired:
+        return "Error: command timed out after 60 seconds."
+    except Exception as e:
+        return f"Error executing command: {e}"
+
+
+def tool_grep_search(arguments: dict) -> str:
+    query = arguments.get("query", "")
+    if not query:
+        return "Error: query is required."
+    subpath = arguments.get("path", ".")
+    case_sensitive = arguments.get("case_sensitive", False)
+    
+    target_dir = _safe_resolve_path(subpath)
+    if not target_dir:
+        return "Error: path traversal detected or invalid path."
+    
+    cmd = ["rg", "--line-number", "--no-heading"]
+    if not case_sensitive:
+        cmd.append("-i")
+    cmd.extend([query, str(target_dir)])
+    
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15, cwd=PROJECT_DIR)
+        output = result.stdout
+        if output:
+            resolved_proj_dir = str(Path(PROJECT_DIR).resolve()) + "/"
+            output = output.replace(resolved_proj_dir, "")
+        stderr = result.stderr.strip()
+        if result.returncode == 0:
+            return output or "No matches found."
+        elif result.returncode == 1:
+            return "No matches found."
+        else:
+            return f"Error running ripgrep (code {result.returncode}): {stderr}"
+    except subprocess.TimeoutExpired:
+        return "Error: ripgrep command timed out."
+    except Exception as e:
+        return f"Error executing ripgrep: {e}"
+
+
+def tool_patch_project_file(arguments: dict) -> str:
+    path = arguments.get("path", "")
+    find_text = arguments.get("find_text", "")
+    replace_text = arguments.get("replace_text", "")
+    if not path:
+        return "Error: path is required."
+    
+    target_path = _safe_resolve_path(path)
+    if not target_path or not target_path.is_file():
+        return f"Error: path traversal detected or file does not exist: {path}"
+    
+    try:
+        content = target_path.read_text(encoding="utf-8")
+        occurrences = content.count(find_text)
+        if occurrences == 0:
+            return "Error: find_text not found in the file."
+        if occurrences > 1:
+            return f"Error: find_text is not unique; found {occurrences} occurrences."
+        
+        new_content = content.replace(find_text, replace_text)
+        target_path.write_text(new_content, encoding="utf-8")
+        return f"Successfully patched {path}. Replaced 1 occurrence."
+    except Exception as e:
+        return f"Error patching file: {e}"
+
+
+def tool_crystallize_skill(arguments: dict) -> str:
+    skill_name = arguments.get("skill_name", "")
+    if not skill_name:
+        return "Error: skill_name is required."
+    
+    try:
+        result = subprocess.run(
+            ["python3", "/home/agent/app/crystallize_skill.py", skill_name],
+            capture_output=True, text=True, timeout=150,
+            cwd=PROJECT_DIR,
+        )
+        output = []
+        if result.stdout:
+            output.append(result.stdout)
+        if result.stderr:
+            output.append(result.stderr)
+        return "\n".join(output).strip() or f"Skill crystallization exited with code {result.returncode}."
+    except Exception as e:
+        return f"Error crystallizing skill: {e}"
+
+
+def tool_read_project_log(arguments: dict) -> str:
+    log_file = arguments.get("log_file", "autonomous.log")
+    lines_count = arguments.get("lines", 50)
+    
+    try:
+        lines_count = int(lines_count)
+        if lines_count <= 0:
+            lines_count = 50
+    except ValueError:
+        lines_count = 50
+        
+    logs_dir = Path(PROJECT_DIR) / "logs"
+    target_path = (logs_dir / log_file).resolve()
+    if not target_path.is_relative_to(logs_dir.resolve()):
+        return "Error: path traversal detected."
+    if not target_path.is_file():
+        return f"Error: log file not found: {log_file}"
+        
+    try:
+        with open(target_path, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+            last_lines = lines[-lines_count:]
+            return "".join(last_lines)
+    except Exception as e:
+        return f"Error reading log: {e}"
+
+
+def tool_list_skills(arguments: dict) -> str:
+    try:
+        skills_path = Path(PROJECT_DIR) / "skills"
+        if not skills_path.exists():
+            return "No skills directory found."
+        skills = list(skills_path.glob("*.md"))
+        if not skills:
+            return "No skills crystallized yet."
+        lines = []
+        for s in skills:
+            content = s.read_text(encoding="utf-8")
+            desc = "(No description)"
+            for line in content.splitlines():
+                if line.strip().startswith("## When To Use") or line.strip().startswith("### When To Use"):
+                    idx = content.splitlines().index(line)
+                    if idx + 1 < len(content.splitlines()):
+                        desc = content.splitlines()[idx + 1].strip()
+                    break
+            lines.append(f"- {s.name}: {desc}")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Error listing skills: {e}"
+
+
 TOOL_HANDLERS = {
     "delegate_task": tool_delegate_task,
     "read_project_file": tool_read_project_file,
     "list_project_files": tool_list_project_files,
     "get_project_status": tool_get_project_status,
     "abort_task": tool_abort_task,
+    "write_project_file": tool_write_project_file,
+    "get_project_diff": tool_get_project_diff,
+    "run_project_command": tool_run_project_command,
+    "grep_search": tool_grep_search,
+    "patch_project_file": tool_patch_project_file,
+    "crystallize_skill": tool_crystallize_skill,
+    "read_project_log": tool_read_project_log,
+    "list_skills": tool_list_skills,
 }
 
 
@@ -295,7 +639,33 @@ def handle_jsonrpc(request: dict) -> dict | None:
 
 
 class MCPHandler(BaseHTTPRequestHandler):
+    def check_csrf(self) -> bool:
+        host = self.headers.get("Host", "")
+        allowed_hosts = {
+            f"localhost:{BRIDGE_PORT}",
+            f"127.0.0.1:{BRIDGE_PORT}",
+            "localhost",
+            "127.0.0.1",
+        }
+        if host not in allowed_hosts:
+            self.send_error(400, "Bad Request: Invalid Host header")
+            return False
+
+        origin = self.headers.get("Origin")
+        if origin:
+            allowed_origins = {
+                f"http://localhost:{BRIDGE_PORT}",
+                f"http://127.0.0.1:{BRIDGE_PORT}",
+            }
+            if origin not in allowed_origins:
+                self.send_error(403, "Forbidden: Cross-Origin Request Blocked")
+                return False
+        return True
+
     def do_POST(self) -> None:
+        if not self.check_csrf():
+            return
+
         if self.path != "/mcp":
             self.send_error(404)
             return
@@ -324,6 +694,9 @@ class MCPHandler(BaseHTTPRequestHandler):
         self.wfile.write(response_bytes)
 
     def do_GET(self) -> None:
+        if not self.check_csrf():
+            return
+
         if self.path == "/health":
             body = json.dumps({"healthy": True, "server": SERVER_INFO}).encode()
             self.send_response(200)
