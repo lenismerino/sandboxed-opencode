@@ -96,7 +96,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - agent_network
+      - ${WORKSPACE_NETWORK:-agent_network}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${OPENCODE_PORT:-3000}/"]

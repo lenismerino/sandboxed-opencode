@@ -76,9 +76,7 @@ run-restricted: validate setup
 	@if [ -z "$(PROJECT_NAME)" ]; then echo "Error: PROJECT_NAME is not set in .env."; exit 1; fi
 	@./new_project.sh
 	@echo "Starting in restricted network mode (no internet egress)..."
-	ACTIVE_PROJECT=$(PROJECT_NAME) docker compose up -d --build
-	@docker network disconnect sandboxed-opencode_agent_network opencode-workspace 2>/dev/null || true
-	@docker network connect sandboxed-opencode_agent_network_restricted opencode-workspace 2>/dev/null || true
+	WORKSPACE_NETWORK=agent_network_restricted ACTIVE_PROJECT=$(PROJECT_NAME) docker compose up -d --build
 	@echo "Workspace is on the restricted (internal) network."
 
 stop:
