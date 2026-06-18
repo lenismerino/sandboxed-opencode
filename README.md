@@ -316,9 +316,9 @@ The Dockerfile exposes build args:
 
 - `NODE_MAJOR`, default `22`
 - `NODE_VERSION`, default `22.22.2-1nodesource1`
-- `OPENCODE_VERSION`, default `1.15.10`
+- `OPENCODE_VERSION`, default `1.17.8`
 - `GH_VERSION`, default `2.92.0`
-- `UV_IMAGE`, default `ghcr.io/astral-sh/uv:0.11.16`
+- `UV_IMAGE`, default `ghcr.io/astral-sh/uv:0.11.21`
 - `PYTHON_BASE_IMAGE`, default `python:3.13.13-slim-bookworm`
 - `HOST_UID`, `HOST_GID`
 
