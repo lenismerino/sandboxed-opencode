@@ -127,7 +127,24 @@ jq -n \
     model: ($provider_id + "/" + $model)
   }' > /home/agent/.config/opencode/opencode.json
 
-# Merge MCP server configuration if provided
+# Auto-configure built-in sandbox harness MCP tools (semantic_search, compact_context, evaluate_codebase, track_milestone)
+for h_candidate in "/home/agent/app/harness_mcp.py" "/home/agent/projects/scripts/harness_mcp.py" "scripts/harness_mcp.py"; do
+  if [ -f "$h_candidate" ]; then
+    if jq --arg hscript "$h_candidate" '.mcp = {
+      "sandbox_harness": {
+        "type": "stdio",
+        "command": "python3",
+        "args": [$hscript]
+      }
+    }' /home/agent/.config/opencode/opencode.json > /tmp/opencode-harness.json 2>/dev/null; then
+      mv /tmp/opencode-harness.json /home/agent/.config/opencode/opencode.json
+      echo "Sandbox harness MCP tools registered with OpenCode."
+    fi
+    break
+  fi
+done
+
+# Merge external MCP server configuration if provided
 if [ -n "${MCP_CONFIG_FILE:-}" ]; then
   mcp_path="${MCP_CONFIG_FILE}"
   if [ ! -f "$mcp_path" ] && [ -f "/home/agent/projects/${mcp_path}" ]; then
@@ -137,10 +154,10 @@ if [ -n "${MCP_CONFIG_FILE:-}" ]; then
   fi
 
   if [ -f "$mcp_path" ]; then
-    if jq --slurpfile mcp "$mcp_path" '.mcp = $mcp[0]' \
+    if jq --slurpfile mcp "$mcp_path" '.mcp = ((.mcp // {}) + $mcp[0])' \
       /home/agent/.config/opencode/opencode.json > /tmp/opencode-merged.json 2>/dev/null; then
       mv /tmp/opencode-merged.json /home/agent/.config/opencode/opencode.json
-      echo "MCP configuration loaded from ${mcp_path}"
+      echo "Additional MCP configuration merged from ${mcp_path}"
     else
       echo "Warning: MCP_CONFIG_FILE '${mcp_path}' contains invalid JSON or could not be merged."
     fi
@@ -232,6 +249,13 @@ else
   if [ "${OPENCODE_INTERFACE:-web}" = "tui" ]; then
     exec opencode
   else
+    echo "============================================================"
+    echo "  sandboxed-opencode workspace is live!"
+    echo "  Model Profile: ${MODEL_PROFILE:-custom} (${CONTEXT_LIMIT:-131072} context tokens)"
+    echo "  Inference URL: ${BASE_URL}"
+    echo "  OpenCode Web:  http://localhost:${OPENCODE_PORT:-3000}"
+    echo "  Harness Tools: Enabled (semantic_search, compact_context, evaluate_codebase)"
+    echo "============================================================"
     opencode web --hostname 0.0.0.0 --port "${OPENCODE_PORT:-3000}" &
     child=$!
     wait "$child"

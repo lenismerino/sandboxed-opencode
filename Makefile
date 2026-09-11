@@ -5,7 +5,7 @@ ifneq (,$(wildcard $(CONFIG_FILE)))
     export
 endif
 
-.PHONY: setup validate check versions allowlist ports build run run-tui run-autonomous run-conductor run-restricted stop clean-cache logs nuke-all delete-project scan profiles test-model skills harness
+.PHONY: setup validate check versions allowlist ports build run run-tui run-autonomous run-conductor run-restricted stop clean-cache logs nuke-all delete-project scan profiles test-model skills harness supervisor dashboard
 
 setup:
 	mkdir -p $(PROJECTS_ROOT_PATH) $(SHARED_SYSTEM_PATH) $(TEMP_PATH) logs
@@ -25,6 +25,9 @@ versions:
 	@echo "Ollama image tag: $${OLLAMA_IMAGE_TAG:-0.34.0}"
 	@echo "Active Model Profile: $${MODEL_PROFILE:-gemma-4-e4b}"
 
+quickstart:
+	@python3 scripts/quickstart.py
+
 profiles:
 	@python3 scripts/model_profile.py list
 
@@ -36,6 +39,13 @@ skills:
 
 harness:
 	@python3 scripts/run_harness.py --profile $${MODEL_PROFILE:-gemma-4-e4b} --task "$${TASK:-Verify repository structure and run security checks}"
+
+supervisor:
+	@python3 scripts/run_supervisor.py --profile $${MODEL_PROFILE:-gemma-4-e4b} --host $${LLM_HOST:-192.168.1.3} --port $${LLM_PORT:-1234} $${TASK_FILE:+--task-file $$TASK_FILE} $${TASK:+--task "$$TASK"}
+
+dashboard:
+	@python3 scripts/dashboard.py
+	@echo "Dashboard generated at /tmp/dashboard-public/index.html"
 
 allowlist:
 	@grep -Ev '^(#|$$)' config/apt-package-allowlist.txt
@@ -57,8 +67,8 @@ run: validate setup
 		fi; \
 	elif [ "$(LLM_SOURCE)" = "lm_studio" ]; then \
 		ACTIVE_PROJECT=$(PROJECT_NAME) docker compose up -d --build; \
-		if ! curl -s http://localhost:$${LLM_PORT:-1234}/v1/models | grep -q "$(LM_STUDIO_MODEL)"; then \
-			echo "WARNING: Could not detect $(LM_STUDIO_MODEL) via LM Studio."; \
+		if ! curl -s http://$${LLM_HOST:-localhost}:$${LLM_PORT:-1234}/v1/models | grep -q "$(LM_STUDIO_MODEL)"; then \
+			echo "WARNING: Could not detect $(LM_STUDIO_MODEL) via LM Studio at $${LLM_HOST:-localhost}:$${LLM_PORT:-1234}."; \
 		fi; \
 	elif [ "$(LLM_SOURCE)" = "fastflow_amd" ]; then \
 		ACTIVE_PROJECT=$(PROJECT_NAME) docker compose up -d --build; \

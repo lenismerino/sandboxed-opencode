@@ -218,6 +218,25 @@ TOOLS = [
         "description": "Get details about the active model profile (context window, sampling, reasoning capabilities).",
         "inputSchema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "semantic_search",
+        "description": "Perform semantic similarity search across project source code using local offline embeddings.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Natural language or technical query to search for.",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "Number of top matching snippets. Defaults to 5.",
+                    "default": 5,
+                },
+            },
+            "required": ["query"],
+        },
+    },
 ]
 
 
@@ -587,6 +606,26 @@ def tool_get_model_profile(arguments: dict) -> str:
     return f"Active model profile: {profile_name} (details file not found)."
 
 
+def tool_semantic_search(arguments: dict) -> str:
+    query = arguments.get("query", "")
+    top_k = int(arguments.get("top_k", 5))
+    if not query:
+        return "Error: query is required."
+    try:
+        from harness.embeddings import LocalEmbeddingClient, SemanticCodeIndex
+        host = os.environ.get("LLM_HOST", "host.docker.internal")
+        port = os.environ.get("LLM_PORT", "1234")
+        base_url = f"http://{host}:{port}/v1"
+        client = LocalEmbeddingClient(base_url=base_url)
+        index = SemanticCodeIndex(project_dir=PROJECT_DIR, embedding_client=client)
+        results = index.search(query, top_k=top_k)
+        if not results:
+            return "No semantically relevant snippets found."
+        return "\n\n---\n\n".join(r.format_snippet() for r in results)
+    except Exception as e:
+        return f"Error executing semantic search: {e}"
+
+
 TOOL_HANDLERS = {
     "delegate_task": tool_delegate_task,
     "read_project_file": tool_read_project_file,
@@ -602,6 +641,7 @@ TOOL_HANDLERS = {
     "read_project_log": tool_read_project_log,
     "list_skills": tool_list_skills,
     "get_model_profile": tool_get_model_profile,
+    "semantic_search": tool_semantic_search,
 }
 
 

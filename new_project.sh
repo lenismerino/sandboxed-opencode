@@ -91,6 +91,20 @@ if [ -d "skills" ]; then
   cp -R skills/. "$PROJECT_DIR/skills/"
 fi
 
+mkdir -p "$PROJECT_DIR/.opencode"
+cat << 'EOF' > "$PROJECT_DIR/.opencode/instructions.md"
+# Operating Instructions for OpenCode & Local Reasoning Models
+
+You are an expert autonomous software engineer operating within a hardened container sandbox.
+
+## Flagship Reasoning Model: Google Gemma 4 E4B
+1. **Structured Reasoning**: Think through problems step-by-step. Formulate a hypothesis and inspect existing files before making edits.
+2. **Offline Semantic Search**: Use the `semantic_search` tool from the sandbox harness to find relevant functions and classes across the project.
+3. **Continuous Verification**: After editing code, call `evaluate_codebase` or run `make test` / `make lint` to verify syntax and test correctness.
+4. **Context Compaction**: When completing major tasks or if the session becomes extensive, call `compact_context` to checkpoint architectural decisions and preserve context headroom.
+5. **Milestone Tracking**: Call `track_milestone` to keep the visual telemetry dashboard updated with your progress.
+EOF
+
 # Only initialize Git and write README if it's a completely new project
 if [ ! -d "$PROJECT_DIR/.git" ]; then
   echo "# ${PROJECT_NAME}" > "$PROJECT_DIR/README.md"
