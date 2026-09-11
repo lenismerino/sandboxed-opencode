@@ -1,6 +1,7 @@
 """Unit tests for the agent loop harness components."""
 
 import unittest
+from pathlib import Path
 from harness.context import ContextManager
 from harness.evaluator import EvaluationCheck, EvaluationReport
 from tools.registry import ToolRegistry
@@ -59,10 +60,32 @@ class TestToolRegistry(unittest.TestCase):
         self.assertIn("grep_search", names)
         self.assertIn("patch_file", names)
         self.assertIn("run_command", names)
+        self.assertIn("semantic_search", names)
 
     def test_path_traversal_blocked(self) -> None:
         out = self.registry.execute("read_file", {"path": "../../../etc/passwd"})
         self.assertIn("outside project root", out)
+
+
+class TestSemanticEmbeddings(unittest.TestCase):
+    def test_cosine_similarity(self) -> None:
+        from harness.embeddings import _cosine_similarity
+        vec1 = [1.0, 0.0, 0.0]
+        vec2 = [1.0, 0.0, 0.0]
+        vec3 = [0.0, 1.0, 0.0]
+        self.assertAlmostEqual(_cosine_similarity(vec1, vec2), 1.0)
+        self.assertAlmostEqual(_cosine_similarity(vec1, vec3), 0.0)
+
+    def test_chunking(self) -> None:
+        import tempfile
+        from harness.embeddings import SemanticCodeIndex
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sample = Path(tmpdir) / "sample.py"
+            sample.write_text("\n".join(f"print({i})" for i in range(100)))
+            index = SemanticCodeIndex(project_dir=tmpdir)
+            chunks = index._chunk_file(sample, max_lines=30, overlap=5)
+            self.assertGreater(len(chunks), 2)
+            self.assertEqual(chunks[0].start_line, 1)
 
 
 class TestEvaluationReport(unittest.TestCase):

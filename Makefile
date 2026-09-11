@@ -25,6 +25,9 @@ versions:
 	@echo "Ollama image tag: $${OLLAMA_IMAGE_TAG:-0.34.0}"
 	@echo "Active Model Profile: $${MODEL_PROFILE:-gemma-4-e4b}"
 
+quickstart:
+	@python3 scripts/quickstart.py
+
 profiles:
 	@python3 scripts/model_profile.py list
 

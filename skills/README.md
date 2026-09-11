@@ -10,12 +10,16 @@ Skills can be placed directly as Markdown files (`skills/<skill_name>.md`) or or
 skills/
 ├── README.md
 ├── coding/
-│   └── fast_refactor/
+│   ├── fast_refactor/
+│   │   └── SKILL.md
+│   └── test_driven_development/
 │       └── SKILL.md
 ├── testing/
 │   └── pytest_hardening/
 │       └── SKILL.md
 ├── security/
+│   ├── offline_audit/
+│   │   └── SKILL.md
 │   └── secret_remediation/
 │       └── SKILL.md
 └── orchestration/

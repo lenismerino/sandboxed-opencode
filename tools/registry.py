@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import subprocess
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -236,3 +237,40 @@ class ToolRegistry:
                 return f"Error executing command: {err}"
 
         self.register("run_command", run_schema, _run_command)
+
+        # 7. semantic_search
+        semantic_schema = {
+            "name": "semantic_search",
+            "description": "Perform semantic similarity search across project source code using local offline embeddings.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Natural language or technical concept to search for."},
+                    "top_k": {"type": "integer", "description": "Number of top matching snippets to return. Default is 5.", "default": 5},
+                },
+                "required": ["query"],
+            },
+        }
+
+        def _semantic_search(query: str, top_k: int = 5) -> str:
+            from harness.embeddings import LocalEmbeddingClient, SemanticCodeIndex
+            host = os.environ.get("LLM_HOST", "host.docker.internal")
+            port = os.environ.get("LLM_PORT", "1234")
+            base_url = f"http://{host}:{port}/v1"
+            client = LocalEmbeddingClient(base_url=base_url)
+            index = SemanticCodeIndex(project_dir=str(self.project_dir), embedding_client=client)
+
+            # Auto-index if database is empty
+            with sqlite3.connect(index.db_path) as conn:
+                count = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+                if count == 0:
+                    indexed = index.index_project()
+                    if indexed == 0:
+                        return "No indexable project files found for semantic search."
+
+            results = index.search(query, top_k=top_k)
+            if not results:
+                return "No semantically relevant code snippets found."
+            return "\n\n---\n\n".join(r.format_snippet() for r in results)
+
+        self.register("semantic_search", semantic_schema, _semantic_search)

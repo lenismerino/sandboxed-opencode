@@ -22,11 +22,37 @@ class ModelClient:
         profile: Dict[str, Any],
         api_key: Optional[str] = None,
         timeout: int = 120,
+        max_retries: int = 3,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.profile = profile
         self.api_key = api_key
         self.timeout = timeout
+        self.max_retries = max_retries
+
+    def warm_up(self) -> bool:
+        """Ping the model endpoint with a minimal completion to ensure GPU layers are loaded."""
+        model_id = self.profile["model_id"]
+        payload = {
+            "model": model_id,
+            "messages": [{"role": "user", "content": "ping"}],
+            "max_tokens": 1,
+        }
+        url = f"{self.base_url}/chat/completions"
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        try:
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers=headers,
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                return resp.status == 200
+        except Exception:
+            return False
 
     def complete(
         self,
@@ -35,7 +61,7 @@ class ModelClient:
         response_format: Optional[Dict[str, Any]] = None,
         temperature: Optional[float] = None,
     ) -> Dict[str, Any]:
-        """Send a chat completion request to the model.
+        """Send a chat completion request to the model with auto-retry on transient errors.
 
         Args:
             messages: Conversation messages.
@@ -77,32 +103,45 @@ class ModelClient:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
         url = f"{self.base_url}/chat/completions"
-        t0 = time.time()
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers=headers,
-            method="POST",
-        )
+        last_err: Optional[Exception] = None
 
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                resp_json = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as err:
-            body = err.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Model API error HTTP {err.code}: {body}") from err
-        except Exception as err:
-            raise RuntimeError(f"Network error connecting to {url}: {err}") from err
+        for attempt in range(1, self.max_retries + 1):
+            t0 = time.time()
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers=headers,
+                method="POST",
+            )
 
-        elapsed = time.time() - t0
-        choice = resp_json.get("choices", [{}])[0]
-        msg = choice.get("message", {})
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                    resp_json = json.loads(resp.read().decode("utf-8"))
+                    elapsed = time.time() - t0
+                    choice = resp_json.get("choices", [{}])[0]
+                    msg = choice.get("message", {})
 
-        return {
-            "content": msg.get("content") or "",
-            "reasoning_content": msg.get("reasoning_content") or "",
-            "tool_calls": msg.get("tool_calls") or [],
-            "finish_reason": choice.get("finish_reason"),
-            "usage": resp_json.get("usage", {}),
-            "elapsed_seconds": round(elapsed, 3),
-        }
+                    return {
+                        "content": msg.get("content") or "",
+                        "reasoning_content": msg.get("reasoning_content") or "",
+                        "tool_calls": msg.get("tool_calls") or [],
+                        "finish_reason": choice.get("finish_reason"),
+                        "usage": resp_json.get("usage", {}),
+                        "elapsed_seconds": round(elapsed, 3),
+                    }
+            except urllib.error.HTTPError as err:
+                body = err.read().decode("utf-8", errors="replace")
+                last_err = RuntimeError(f"Model API error HTTP {err.code}: {body}")
+                # Retry on 429, 502, 503, 504
+                if err.code in (429, 502, 503, 504) and attempt < self.max_retries:
+                    time.sleep(1.5 * attempt)
+                    continue
+                raise last_err from err
+            except Exception as err:
+                last_err = RuntimeError(f"Network error connecting to {url}: {err}")
+                if attempt < self.max_retries:
+                    time.sleep(1.5 * attempt)
+                    continue
+                raise last_err from err
+
+        raise last_err or RuntimeError(f"Failed to get response after {self.max_retries} attempts.")

@@ -22,8 +22,19 @@ The flagship configuration is tuned for **Google Gemma 4 E4B** running via LM St
 - **Flexible Network & Endpoint Routing**:
   - `LLM_HOST`: support connecting to private LAN model endpoints (e.g. `192.168.1.3:1234`) without granting unrestricted WAN egress.
   - Restricted internal network mode (`make run-restricted`).
+- **Zero-Config Auto-Discovery Wizard (`make quickstart` & `scripts/quickstart.py`)**:
+  - Automatically scans localhost and local network (LAN) for active LM Studio or Ollama servers.
+  - Detects loaded models, matches optimal model profiles, tunes 131K context window parameters, and generates `.env` automatically.
+- **Offline Local Semantic Code Search (`harness/embeddings.py`)**:
+  - Pure-Python standard library cosine similarity and SQLite vector caching (`.cache/semantic_index.db`).
+  - Connects to local embedding models (e.g. `text-embedding-nomic-embed-text-v1.5`) without external vector DBs or cloud dependencies.
+  - Integrated into both standard tool registry (`semantic_search`) and Conductor MCP bridge.
+- **Resilient Inference Client (`harness/model_client.py`)**:
+  - Exponential backoff retry loops and connection health probing to absorb inference engine restarts.
+  - Automatic model warm-up routines to mitigate cold-start latencies.
 - **Skills, Tools & Plugins System**:
   - Categorized skill taxonomy (`skills/coding/`, `skills/testing/`, `skills/security/`, `skills/orchestration/`) with YAML frontmatter metadata.
+  - New built-in skills: `test_driven_development` and `offline_audit`.
   - Standardized, path-traversal-shielded tools registry (`tools/registry.py`).
   - Real-time token utilization and reasoning telemetry hook (`plugins/hooks/token_telemetry.py`).
 - **Software Stack Upgrades**:
@@ -75,25 +86,37 @@ graph TD
 
 ---
 
-## Quickstart with Google Gemma 4 E4B
+## Quickstart
 
-### 1. Serve Gemma 4 E4B in LM Studio
-- Load `google/gemma-4-e4b` (Q4_K_M or higher).
-- In LM Studio Developer/Server tab: set **Context Length** to `131072`.
-- Start the server on port `1234` (bind to your host or LAN IP, e.g. `192.168.1.3`).
+### Option A: Zero-Config Auto-Discovery (Recommended)
 
-### 2. Configure Environment
+Simply start your model in **LM Studio** or **Ollama** and run:
+
 ```bash
-cp .env.example .env
+make quickstart
 ```
-Edit `.env` and verify:
-```bash
-MODEL_PROFILE=gemma-4-e4b
-LLM_HOST=192.168.1.3
-LLM_PORT=1234
-LLM_SOURCE=lm_studio
-LM_STUDIO_MODEL=google/gemma-4-e4b
-```
+
+The auto-discovery wizard probes your machine and local network, identifies the loaded model (e.g. `google/gemma-4-e4b`), applies optimal context/sampling profiles, checks embedding models for semantic search, and configures `.env` automatically.
+
+### Option B: Manual Setup with Google Gemma 4 E4B
+
+1. **Serve Gemma 4 E4B in LM Studio**:
+   - Load `google/gemma-4-e4b` (Q4_K_M or higher).
+   - Set **Context Length** to `131072`.
+   - Start the server on port `1234` (bind to `0.0.0.0` or your LAN IP, e.g. `192.168.1.3`).
+
+2. **Configure Environment**:
+   ```bash
+   cp .env.example .env
+   ```
+   Edit `.env` and verify:
+   ```bash
+   MODEL_PROFILE=gemma-4-e4b
+   LLM_HOST=192.168.1.3
+   LLM_PORT=1234
+   LLM_SOURCE=lm_studio
+   LM_STUDIO_MODEL=google/gemma-4-e4b
+   ```
 
 ### 3. Test Live Model Connectivity
 ```bash
@@ -143,10 +166,12 @@ Skills are organized into domain categories with YAML frontmatter:
 skills/
 ├── README.md
 ├── coding/
-│   └── fast_refactor/SKILL.md
+│   ├── fast_refactor/SKILL.md
+│   └── test_driven_development/SKILL.md
 ├── testing/
 │   └── pytest_hardening/SKILL.md
 ├── security/
+│   ├── offline_audit/SKILL.md
 │   └── secret_remediation/SKILL.md
 └── orchestration/
     └── conductor_subagent/SKILL.md
@@ -169,9 +194,11 @@ python3 scripts/crystallize_skill.py my_workflow
 ## Operational Commands
 
 ```bash
+make quickstart   # Zero-config auto-discovery of LM Studio or Ollama
 make validate     # Validate configuration, ports, and model profile
 make check        # Run full security auditor (secrets, seccomp, port bindings)
 make versions     # Display pinned software versions and active model profile
+make test-model   # Run live capabilities tests against LLM endpoint
 make build        # Build the hardened workspace container image
 make scan         # Scan workspace image for CVEs using Trivy
 make logs         # Tail container logs
@@ -186,6 +213,8 @@ make stop         # Stop all services gracefully
 - [Model Profiles Reference](file:///Users/mauricio/Coding/sandboxed-opencode/docs/model_profiles.md)
 - [Harness & Agent Loops Guide](file:///Users/mauricio/Coding/sandboxed-opencode/docs/harness_and_loops.md)
 - [Skills & Plugins Guide](file:///Users/mauricio/Coding/sandboxed-opencode/docs/skills_and_plugins.md)
+- [Recipe: Zero-Config Auto-Discovery Quickstart](file:///Users/mauricio/Coding/sandboxed-opencode/docs/recipes/zero_config_quickstart.md)
+- [Recipe: Local Offline Semantic Code Search](file:///Users/mauricio/Coding/sandboxed-opencode/docs/recipes/semantic_code_search.md)
 - [Recipe: LM Studio + Gemma 4 E4B](file:///Users/mauricio/Coding/sandboxed-opencode/docs/recipes/gemma4_lmstudio.md)
 - [Recipe: Autonomous Coding](file:///Users/mauricio/Coding/sandboxed-opencode/docs/recipes/autonomous_coding.md)
 - [Recipe: Conductor Mode Orchestration](file:///Users/mauricio/Coding/sandboxed-opencode/docs/recipes/conductor_workflow.md)

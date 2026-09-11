@@ -12,7 +12,9 @@ PUBLIC_DIR = Path(os.environ.get("DASHBOARD_PUBLIC_DIR", "/tmp/dashboard-public"
 OUTPUT = PUBLIC_DIR / "index.html"
 
 PROJECT_NAME = os.environ.get("PROJECT_NAME", "unknown")
+MODEL_PROFILE = os.environ.get("MODEL_PROFILE", "")
 LLM_SOURCE = os.environ.get("LLM_SOURCE", "unknown")
+LLM_HOST = os.environ.get("LLM_HOST", "host.docker.internal")
 LLM_MODEL = (
     os.environ.get("LM_STUDIO_MODEL")
     or os.environ.get("FASTFLOW_MODEL")
@@ -134,22 +136,50 @@ def stat_card(label: str, value: str, color: str = "#3b82f6") -> str:
 
 
 def build_html(
-    resources: list[dict], portscan: list[dict], summaries: list[dict],
+    resources: list[dict], portscan: list[dict], summaries: list[dict], telemetry: list[dict] = None,
 ) -> str:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     elapsed = compute_elapsed([resources, portscan, summaries])
+    telemetry = telemetry or []
 
     sections = []
 
     # -- Header --
+    header_cards = [
+        stat_card("Project", PROJECT_NAME, "#a78bfa"),
+    ]
+    if MODEL_PROFILE:
+        header_cards.append(stat_card("Model Profile", MODEL_PROFILE, "#c084fc"))
+    header_cards.extend([
+        stat_card("Endpoint", f"{LLM_HOST}", "#38bdf8"),
+        stat_card("Mode", f"{OPERATION_MODE} ({OPENCODE_INTERFACE})", "#34d399"),
+        stat_card("Elapsed", elapsed, "#fbbf24"),
+    ])
+
     sections.append(
         f'<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:24px">'
-        f'{stat_card("Project", PROJECT_NAME, "#a78bfa")}'
-        f'{stat_card("LLM", f"{LLM_SOURCE} / {LLM_MODEL}", "#38bdf8")}'
-        f'{stat_card("Mode", f"{OPERATION_MODE} ({OPENCODE_INTERFACE})", "#34d399")}'
-        f'{stat_card("Elapsed", elapsed, "#fbbf24")}'
-        f"</div>"
+        + "".join(header_cards)
+        + "</div>"
     )
+
+    # -- Agent Telemetry --
+    if telemetry:
+        total_steps = len(telemetry)
+        latencies = [t.get("latency_seconds", 0.0) for t in telemetry]
+        avg_lat = sum(latencies) / len(latencies) if latencies else 0.0
+        util_pcts = [t.get("context_utilization_pct", 0.0) for t in telemetry]
+        peak_util = max(util_pcts) if util_pcts else 0.0
+
+        sections.append(
+            f"<h2>Agent Loop Telemetry</h2>"
+            f'<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px">'
+            f'{stat_card("Executed Steps", str(total_steps), "#a78bfa")}'
+            f'{stat_card("Avg Latency", f"{avg_lat:.2f}s", "#38bdf8")}'
+            f'{stat_card("Peak Context", f"{peak_util:.1f}%", "#34d399")}'
+            f"</div>"
+            f"<h3>Step Latency Over Time (s)</h3>"
+            f"{svg_line_chart(latencies, color='#c084fc', y_label='Latency (s)')}"
+        )
 
     # -- Resource Usage --
     if resources:
@@ -300,8 +330,9 @@ def main() -> None:
     resources = read_jsonl(LOG_DIR / "resources.jsonl")
     portscan = read_jsonl(LOG_DIR / "portscan.jsonl")
     summaries = read_jsonl(LOG_DIR / "security_summary.jsonl")
+    telemetry = read_jsonl(LOG_DIR / "telemetry.jsonl")
 
-    html = build_html(resources, portscan, summaries)
+    html = build_html(resources, portscan, summaries, telemetry)
 
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(html)
