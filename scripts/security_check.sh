@@ -59,6 +59,20 @@ if [ -f "${CONFIG_FILE:-.env.example}" ]; then
   set +a
 fi
 
+# Python syntax compilation check
+for py_file in \
+  scripts/dashboard.py \
+  scripts/mcp-bridge.py \
+  scripts/crystallize_skill.py \
+  scripts/model_profile.py \
+  scripts/skills_manager.py \
+  scripts/run_harness.py; do
+  python3 -m py_compile "$py_file"
+done
+
+# Check harness, tools, plugins
+python3 -m unittest discover -s harness -p "*_test.py" >/dev/null
+
 if [ "${SECRET_SCAN_STRICT:-true}" = "true" ]; then
   if grep -RIn --exclude-dir=.git --exclude='*.md' --exclude='.env' --exclude='.env.example' \
     -E 'AKIA[0-9A-Z]{16}' .; then
@@ -81,6 +95,12 @@ if [ "${SECRET_SCAN_STRICT:-true}" = "true" ]; then
   if grep -RIn --exclude-dir=.git --exclude='*.md' --exclude='.env' --exclude='.env.example' \
     -E 'xox[bpors]-[A-Za-z0-9-]{10,}' .; then
     echo "Error: potential Slack token detected." >&2
+    exit 1
+  fi
+
+  if grep -RIn --exclude-dir=.git --exclude='*.md' --exclude='.env' --exclude='.env.example' \
+    --exclude='security_check.sh' -E '(hf_[A-Za-z0-9]{34,}|sk-ant-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{35})' .; then
+    echo "Error: potential AI provider token detected." >&2
     exit 1
   fi
 fi

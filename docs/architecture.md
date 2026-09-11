@@ -1,72 +1,93 @@
-# Architecture
+# Sandboxed OpenCode Architecture
 
-## Components
+A secure, containerized software development environment pairing local open-weights reasoning models with strict host isolation, agent loop harnesses, model profiles, and conductor orchestration.
 
-- **Host:** Runs Docker, LM Studio or another OpenAI-compatible model endpoint, and owns the mounted project directories.
-- **Workspace container:** Runs OpenCode as the non-root `agent` user and mounts exactly one active project at `/home/agent/projects`. Supports two operation modes: interactive (web UI) and autonomous (headless task execution).
-- **Optional LLM container:** Runs Ollama behind a Compose profile when `LLM_SOURCE=ollama_docker`.
-- **Generated projects:** Receive `AGENTS.md`, `.env`, `Makefile`, `src/`, `docs/`, `artifacts/`, `logs/`, and `skills/`.
+```mermaid
+graph TD
+    subgraph Host ["Host Infrastructure"]
+        Docker["Docker Engine"]
+        LMStudio["LM Studio / Local Endpoint<br/>(192.168.1.3:1234)<br/><b>Google Gemma 4 E4B</b>"]
+        ProjectsDisk["Host Storage: Projects & Caches"]
+    end
 
-## LLM Provider Support
+    subgraph Container ["Workspace Container (Read-Only Root)"]
+        direction TB
+        OpenCode["OpenCode 1.18.30"]
+        Harness["Harness & Agent Loop Runner"]
+        ContextMgr["ContextManager (131K Window)"]
+        ProfileLoader["Model Profiles Engine"]
+        ToolReg["ToolRegistry (Traversal Shield)"]
+        SkillsSystem["Skills System (Metadata & Hooks)"]
+        MCPBridge["MCP Conductor Bridge (:8443)"]
+    end
 
-| Provider | Transport | Default Port | Tool Calling | MCP | Auth |
-|---|---|---|---|---|---|
-| LM Studio | OpenAI-compatible `/v1` | 1234 | Yes | Yes (via API) | Optional Bearer token |
-| FastFlowLM | OpenAI-compatible `/v1` | 52625 | Yes | No | No |
-| Ollama | OpenAI-compatible `/v1` | 11434 | Yes | No (needs bridge) | No |
+    subgraph External ["External Orchestrator"]
+        Conductor["Frontier AI Agent<br/>(Antigravity / Claude Code)"]
+    end
 
-## Interface & Operation Modes
+    Conductor <-->|JSON-RPC HTTP| MCPBridge
+    MCPBridge <--> OpenCode
+    Harness --> ContextMgr
+    Harness --> ProfileLoader
+    Harness --> ToolReg
+    ToolReg <--> ProjectsDisk
+    ProfileLoader <-->|K/P Sampling, 131K Context| LMStudio
+    OpenCode <-->|Inference| LMStudio
+```
 
-- **Web UI** (`OPENCODE_INTERFACE=web`, default): OpenCode starts a browser-based UI at `localhost:${OPENCODE_PORT}`. Use `make run`.
-- **Terminal TUI** (`OPENCODE_INTERFACE=tui`): OpenCode starts a terminal UI directly in the shell. No browser or port needed. Use `make run-tui`.
-- **Autonomous** (`OPERATION_MODE=autonomous`): OpenCode runs `opencode run` with a task file, auto-approves all tool calls, and exits when complete. Use `make run-autonomous`.
-- **Conductor** (`OPERATION_MODE=conductor`): A frontier AI coding agent (e.g., Claude Code, Gemini CLI, Codex, Antigravity) orchestrates the local agent via an MCP bridge. OpenCode runs headless (`opencode serve`), and the MCP bridge server exposes tools for task delegation, file reading, and project status. Use `make run-conductor`.
+---
 
-## Data Flow
+## 1. Architectural Layers
 
-1. The operator configures `.env`.
-2. `make run` (or `make run-autonomous`) validates configuration and initializes the active project.
-3. Compose starts the workspace with local-only port bindings.
-4. `entrypoint.sh` generates OpenCode provider config from environment variables, optionally merging MCP server configuration.
-5. OpenCode connects to LM Studio, FastFlowLM, or Ollama through the configured OpenAI-compatible endpoint.
-6. In autonomous mode, OpenCode processes the task file and exits. In interactive mode, the web UI stays running.
+### Layer 1: Container Hardening & Sandboxing
+- **Read-Only Root Filesystem**: Protects system binaries from tampering.
+- **Constrained Tmpfs Mounts**: Minimal ephemeral writes in `/tmp` and `/home/agent/.cache`.
+- **Capability Dropping**: Drops `ALL` capabilities; only tightly scoped privileges (`CHOWN`, `SETUID`, `SETGID`, `KILL`) are re-added for allowlisted sudo helpers (`agent-apt-install`, `agent-kill-port`).
+- **Seccomp Syscall Filter**: Blocks kernel modification, reboot, swap management, and `ptrace` exploits.
+- **Resource Constraints**: Strict limits on memory (`8g`), CPUs (`4`), PIDs (`512`), and open file descriptors (`4096`).
 
-## MCP Integration
+### Layer 2: Network Topology & LLM Routing
+- **Local Host**: Resolves `host.docker.internal` for collocated model servers.
+- **LAN Private Routing**: Supports `LLM_HOST` (e.g. `192.168.1.3`) for routing to dedicated GPU inference nodes without enabling public internet exposure.
+- **Restricted Mode (`make run-restricted`)**: Switches container to an internal bridge (`agent_network_restricted`) without WAN internet routing.
 
-External tools are configured via `MCP_CONFIG_FILE` pointing to a JSON file. The entrypoint merges this into `opencode.json` at startup. OpenCode supports local (stdio) and remote (HTTP) MCP servers natively.
+### Layer 3: Model Profiles Framework
+Declarative JSON specifications (`config/model_profiles/*.json`) defining optimal model hyperparameters:
+- **Google Gemma 4 E4B**: 131K context window, `top_k=40`, `top_p=0.95`, `temperature=0.2`, reasoning trace isolation, strict OpenAI function schema calling.
+- **Alibaba Qwen 3.5 9B**: 262K context window, dense reasoning and multimodal input handling.
+- **Qwen 3 4B**: Ultra-lightweight local profile for low-memory environments.
 
-## Security Controls
+### Layer 4: Harness & Agent Loop Engine
+- **`ContextManager`**: Computes token usage, preserves critical anchors (system prompt + initial problem statement), and slides context history smoothly to fit within model boundaries.
+- **`AgentLoopRunner`**: Multi-turn state machine orchestrating iterative coding, reasoning extraction, tool execution, and verification cycles.
+- **`TaskEvaluator`**: Automated quality gate validating formatting (`ruff format`), static typing (`mypy`), linting (`ruff check`), and test suites (`pytest`).
 
-- Non-root container user with UID/GID validation.
-- Read-only root filesystem with targeted tmpfs mounts.
-- Custom seccomp profile blocking dangerous syscalls (`config/seccomp-workspace.json`).
-- Capability dropping (all dropped, narrow set re-added for sudo wrappers).
-- One read/write project mount.
-- Optional read-only shared mount.
-- Disposable temp/cache mount.
-- Pinned toolchain versions with SHA-256 verification.
-- Local-only exposed ports validated against `config/port-allowlist.txt`.
-- Runtime apt installs mediated by `sudo agent-apt-install` and `config/apt-package-allowlist.txt`.
-- Explicit environment variable pass-through (no host paths or build-time values leaked).
-- Resource limits: CPU, memory, PIDs, file descriptors, process count, core dumps disabled.
-- Log rotation on all Docker service logs.
-- Healthchecks on workspace and LLM backend services.
-- Graceful signal handling with SIGTERM trap.
-- Lightweight secret-pattern scan through `make check` (core + expanded patterns).
-- Optional runtime monitoring: port scanning, resource snapshots, security reports (JSONL format).
-- Optional monitoring dashboard served on a separate port (static HTML with SVG charts).
-- Restricted network mode available via `make run-restricted`.
-- Image vulnerability scanning via `make scan` (Trivy).
+### Layer 5: Extensibility (Skills, Tools, Plugins)
+- **Skills (`skills/`)**: Categorized procedural guides with standardized YAML frontmatter metadata.
+- **Tools (`tools/`)**: Sandboxed operations with strict path traversal boundaries (`read_file`, `write_file`, `patch_file`, `grep_search`, `run_command`).
+- **Plugins (`plugins/`)**: Pre/post execution hooks and telemetry loggers.
 
-## Operational Checks
+---
 
-Use these commands before starting work:
+## 2. Operation Modes
+
+| Mode | Trigger | Description | Use Case |
+|---|---|---|---|
+| **Interactive** | `make run` / `make run-tui` | Web browser UI on port 3000 or terminal TUI | Human-in-the-loop development & iterative pairing |
+| **Autonomous** | `make run-autonomous` | Auto-approves all actions, executes markdown task end-to-end | Overnight features, refactors, and test generation |
+| **Conductor** | `make run-conductor` | Headless OpenCode + MCP streamable HTTP bridge on port 8443 | External frontier AI agents orchestrating local sandbox |
+| **Harness** | `make harness` | Direct programmatic Python harness loop and automated evaluation | Benchmarking, continuous evaluation, regression testing |
+
+---
+
+## 3. Operational Command Reference
 
 ```bash
-make validate
-make check
-make versions
-make ports
-make allowlist
-make scan
+make validate     # Validate .env and active model profile configuration
+make check        # Run full security auditor (secrets, seccomp, port bindings)
+make versions     # Inspect pinned software dependencies and active profile
+make profiles     # List all available model profiles
+make test-model   # Run live capabilities tests against LLM endpoint
+make skills       # Discover and list registered skills
+make harness      # Execute test harness evaluation loop
 ```

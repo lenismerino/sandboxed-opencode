@@ -4,16 +4,16 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        - PYTHON_BASE_IMAGE=${PYTHON_BASE_IMAGE:-python:3.13.13-slim-bookworm}
-        - UV_IMAGE=${UV_IMAGE:-ghcr.io/astral-sh/uv:0.11.21}
+        - PYTHON_BASE_IMAGE=${PYTHON_BASE_IMAGE:-python:3.13.15-slim-bookworm}
+        - UV_IMAGE=${UV_IMAGE:-ghcr.io/astral-sh/uv:0.12.13}
         - HOST_UID=${HOST_UID:-501}
         - HOST_GID=${HOST_GID:-20}
         - NODE_MAJOR=${NODE_MAJOR:-22}
-        - NODE_VERSION=${NODE_VERSION:-22.22.2-1nodesource1}
-        - OPENCODE_VERSION=${OPENCODE_VERSION:-1.17.8}
-        - GH_VERSION=${GH_VERSION:-2.92.0}
-        - GH_AMD64_SHA256=${GH_AMD64_SHA256:-8f8212b1a9cec261a8839e0893168f50d3fc70f095da257feef4229234cefdf8}
-        - GH_ARM64_SHA256=${GH_ARM64_SHA256:-34d620b7c884774ed86236541535170889fda0b99aafbdab8b69c7d458b5ca6b}
+        - NODE_VERSION=${NODE_VERSION:-22.23.2-1nodesource1}
+        - OPENCODE_VERSION=${OPENCODE_VERSION:-1.18.30}
+        - GH_VERSION=${GH_VERSION:-2.100.0}
+        - GH_AMD64_SHA256=${GH_AMD64_SHA256:-698c8d88cc19cc92bfe96bad58d10b2a5b274c52433d6dc57799c81f6139d5fc}
+        - GH_ARM64_SHA256=${GH_ARM64_SHA256:-33ccd2ad7ce639c927e1cb209e36555b0e1fbb89f7a38239c0568040ec758612}
     container_name: opencode-workspace
     hostname: sandbox
     user: "${HOST_UID}:${HOST_GID}"
@@ -67,7 +67,9 @@ services:
       - UV_CACHE_DIR=/home/agent/temp/uv_cache
       - RUFF_CACHE_DIR=/home/agent/temp/ruff_cache
       - MYPY_CACHE_DIR=/home/agent/temp/mypy_cache
-      - LLM_SOURCE=${LLM_SOURCE}
+      - MODEL_PROFILE=${MODEL_PROFILE:-}
+      - LLM_HOST=${LLM_HOST:-host.docker.internal}
+      - LLM_SOURCE=${LLM_SOURCE:-lm_studio}
       - LM_STUDIO_MODEL=${LM_STUDIO_MODEL:-}
       - FASTFLOW_MODEL=${FASTFLOW_MODEL:-}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-}
@@ -111,7 +113,7 @@ services:
         max-file: "${LOG_MAX_FILE:-5}"
 
   llm-backend:
-    image: ollama/ollama:${OLLAMA_IMAGE_TAG:-0.23.1}
+    image: ollama/ollama:${OLLAMA_IMAGE_TAG:-0.34.0}
     container_name: opencode-llm
     profiles:
       - local-llm

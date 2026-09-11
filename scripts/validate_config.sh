@@ -72,19 +72,46 @@ if [ -n "${MCP_BRIDGE_PORT:-}" ]; then
   validate_port_value MCP_BRIDGE_PORT "$MCP_BRIDGE_PORT"
 fi
 
+if [ -n "${MODEL_PROFILE:-}" ]; then
+  if [ ! -f "config/model_profiles/${MODEL_PROFILE}.json" ]; then
+    echo "Error: MODEL_PROFILE '${MODEL_PROFILE}' does not exist in config/model_profiles/."
+    exit 1
+  fi
+fi
+
+if [ -n "${LLM_HOST:-}" ]; then
+  if [[ ! "$LLM_HOST" =~ ^([a-zA-Z0-9_.-]+|[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})$ ]]; then
+    echo "Error: LLM_HOST contains invalid characters or format: ${LLM_HOST}"
+    exit 1
+  fi
+fi
+
+if [ -n "${MAX_CONTEXT_LENGTH:-}" ] && { ! [[ "$MAX_CONTEXT_LENGTH" =~ ^[0-9]+$ ]] || [ "$MAX_CONTEXT_LENGTH" -lt 1024 ]; }; then
+  echo "Error: MAX_CONTEXT_LENGTH must be an integer >= 1024."
+  exit 1
+fi
+
 case "$LLM_SOURCE" in
   lm_studio)
-    : "${LM_STUDIO_MODEL:?LM_STUDIO_MODEL must be set when LLM_SOURCE=lm_studio}"
+    if [ -z "${MODEL_PROFILE:-}" ]; then
+      : "${LM_STUDIO_MODEL:?LM_STUDIO_MODEL must be set when LLM_SOURCE=lm_studio}"
+    fi
     ;;
   fastflow_amd)
-    : "${FASTFLOW_MODEL:?FASTFLOW_MODEL must be set when LLM_SOURCE=fastflow_amd}"
+    if [ -z "${MODEL_PROFILE:-}" ]; then
+      : "${FASTFLOW_MODEL:?FASTFLOW_MODEL must be set when LLM_SOURCE=fastflow_amd}"
+    fi
     ;;
   ollama_docker)
-    : "${OLLAMA_MODEL:?OLLAMA_MODEL must be set when LLM_SOURCE=ollama_docker}"
+    if [ -z "${MODEL_PROFILE:-}" ]; then
+      : "${OLLAMA_MODEL:?OLLAMA_MODEL must be set when LLM_SOURCE=ollama_docker}"
+    fi
     ;;
   *)
-    echo "Error: LLM_SOURCE must be one of: lm_studio, fastflow_amd, ollama_docker"
-    exit 1
+    if [ -z "${MODEL_PROFILE:-}" ]; then
+      echo "Error: LLM_SOURCE must be one of: lm_studio, fastflow_amd, ollama_docker"
+      exit 1
+    fi
     ;;
 esac
 

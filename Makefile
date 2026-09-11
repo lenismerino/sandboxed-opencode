@@ -1,26 +1,41 @@
-ifneq (,$(wildcard ./.env))
-    include .env
+CONFIG_FILE ?= $(if $(wildcard ./.env),.env,.env.example)
+
+ifneq (,$(wildcard $(CONFIG_FILE)))
+    include $(CONFIG_FILE)
     export
 endif
 
-.PHONY: setup validate check versions allowlist ports build run run-tui run-autonomous run-conductor run-restricted stop clean-cache logs nuke-all delete-project scan
+.PHONY: setup validate check versions allowlist ports build run run-tui run-autonomous run-conductor run-restricted stop clean-cache logs nuke-all delete-project scan profiles test-model skills harness
 
 setup:
 	mkdir -p $(PROJECTS_ROOT_PATH) $(SHARED_SYSTEM_PATH) $(TEMP_PATH) logs
 
 validate:
-	@./scripts/validate_config.sh
+	@CONFIG_FILE=$(CONFIG_FILE) ./scripts/validate_config.sh
 
 check:
-	@./scripts/security_check.sh
+	@CONFIG_FILE=$(CONFIG_FILE) ./scripts/security_check.sh
 
 versions:
-	@echo "Python base: $${PYTHON_BASE_IMAGE:-python:3.13.13-slim-bookworm}"
-	@echo "uv image: $${UV_IMAGE:-ghcr.io/astral-sh/uv:0.11.21}"
-	@echo "Node package: $${NODE_VERSION:-22.22.2-1nodesource1}"
-	@echo "OpenCode: $${OPENCODE_VERSION:-1.17.8}"
-	@echo "GitHub CLI: $${GH_VERSION:-2.92.0}"
-	@echo "Ollama image tag: $${OLLAMA_IMAGE_TAG:-0.23.1}"
+	@echo "Python base: $${PYTHON_BASE_IMAGE:-python:3.13.15-slim-bookworm}"
+	@echo "uv image: $${UV_IMAGE:-ghcr.io/astral-sh/uv:0.12.13}"
+	@echo "Node package: $${NODE_VERSION:-22.23.2-1nodesource1}"
+	@echo "OpenCode: $${OPENCODE_VERSION:-1.18.30}"
+	@echo "GitHub CLI: $${GH_VERSION:-2.100.0}"
+	@echo "Ollama image tag: $${OLLAMA_IMAGE_TAG:-0.34.0}"
+	@echo "Active Model Profile: $${MODEL_PROFILE:-gemma-4-e4b}"
+
+profiles:
+	@python3 scripts/model_profile.py list
+
+test-model:
+	@python3 scripts/model_profile.py test $${MODEL_PROFILE:-gemma-4-e4b} --host $${LLM_HOST:-192.168.1.3} --port $${LLM_PORT:-1234}
+
+skills:
+	@python3 scripts/skills_manager.py list
+
+harness:
+	@python3 scripts/run_harness.py --profile $${MODEL_PROFILE:-gemma-4-e4b} --task "$${TASK:-Verify repository structure and run security checks}"
 
 allowlist:
 	@grep -Ev '^(#|$$)' config/apt-package-allowlist.txt

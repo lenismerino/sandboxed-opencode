@@ -30,27 +30,68 @@ fi
 mkdir -p /home/agent/temp/uv_cache /home/agent/temp/ruff_cache /home/agent/temp/mypy_cache /home/agent/temp/pytest_cache
 mkdir -p /home/agent/.config/opencode
 
-# Route the LLM Connection
-if [ "$LLM_SOURCE" = "lm_studio" ]; then
+# Route the LLM Connection or Model Profile
+if [ -n "${MODEL_PROFILE:-}" ]; then
+  PROFILE_PATH=""
+  for candidate in \
+    "/home/agent/app/config/model_profiles/${MODEL_PROFILE}.json" \
+    "/home/agent/projects/config/model_profiles/${MODEL_PROFILE}.json" \
+    "config/model_profiles/${MODEL_PROFILE}.json"; do
+    if [ -f "$candidate" ]; then
+      PROFILE_PATH="$candidate"
+      break
+    fi
+  done
+
+  if [ -z "$PROFILE_PATH" ]; then
+    echo "Error: MODEL_PROFILE '${MODEL_PROFILE}' not found in expected profile directories."
+    exit 1
+  fi
+
+  echo "Loading model profile: ${MODEL_PROFILE} (${PROFILE_PATH})"
+  ACTIVE_MODEL="$(jq -r '.model_id' "$PROFILE_PATH")"
+  PROVIDER_ID="$(jq -r '.provider' "$PROFILE_PATH")"
+  PROVIDER_NAME="$(jq -r '.display_name' "$PROFILE_PATH")"
+  CONTEXT_LIMIT="$(jq -r '.context_window.max_context_length // 131072' "$PROFILE_PATH")"
+  OUTPUT_LIMIT="$(jq -r '.context_window.reserved_completion_tokens // 8192' "$PROFILE_PATH")"
+
+  DEFAULT_URL="$(jq -r '.default_base_url // empty' "$PROFILE_PATH")"
+  LLM_HOST_VAL="${LLM_HOST:-host.docker.internal}"
+  if [ -n "${LLM_PORT:-}" ]; then
+    BASE_URL="http://${LLM_HOST_VAL}:${LLM_PORT}/v1"
+  elif [ -n "$DEFAULT_URL" ]; then
+    BASE_URL="$DEFAULT_URL"
+  else
+    BASE_URL="http://${LLM_HOST_VAL}:1234/v1"
+  fi
+elif [ "$LLM_SOURCE" = "lm_studio" ]; then
   : "${LM_STUDIO_MODEL:?LM_STUDIO_MODEL must be set when LLM_SOURCE=lm_studio}"
   PROVIDER_ID="lmstudio"
   PROVIDER_NAME="LM Studio (Host)"
-  BASE_URL="http://host.docker.internal:${LLM_PORT:-1234}/v1"
+  LLM_HOST_VAL="${LLM_HOST:-host.docker.internal}"
+  BASE_URL="http://${LLM_HOST_VAL}:${LLM_PORT:-1234}/v1"
   ACTIVE_MODEL="$LM_STUDIO_MODEL"
+  CONTEXT_LIMIT=131072
+  OUTPUT_LIMIT=8192
 elif [ "$LLM_SOURCE" = "fastflow_amd" ]; then
   : "${FASTFLOW_MODEL:?FASTFLOW_MODEL must be set when LLM_SOURCE=fastflow_amd}"
   PROVIDER_ID="fastflow"
   PROVIDER_NAME="FastFlowLM (Host NPU)"
-  BASE_URL="http://host.docker.internal:${LLM_PORT:-52625}/v1"
+  LLM_HOST_VAL="${LLM_HOST:-host.docker.internal}"
+  BASE_URL="http://${LLM_HOST_VAL}:${LLM_PORT:-52625}/v1"
   ACTIVE_MODEL="$FASTFLOW_MODEL"
+  CONTEXT_LIMIT=32768
+  OUTPUT_LIMIT=4096
 elif [ "$LLM_SOURCE" = "ollama_docker" ]; then
   : "${OLLAMA_MODEL:?OLLAMA_MODEL must be set when LLM_SOURCE=ollama_docker}"
   PROVIDER_ID="ollama"
   PROVIDER_NAME="Ollama (Isolated)"
   BASE_URL="http://opencode-llm:11434/v1"
   ACTIVE_MODEL="$OLLAMA_MODEL"
+  CONTEXT_LIMIT=32768
+  OUTPUT_LIMIT=4096
 else
-  echo "Error: Invalid LLM_SOURCE defined in .env"
+  echo "Error: Invalid LLM_SOURCE or MODEL_PROFILE defined in .env"
   exit 1
 fi
 
@@ -63,6 +104,8 @@ jq -n \
   --arg base_url "$BASE_URL" \
   --arg model "$ACTIVE_MODEL" \
   --arg api_key "$API_KEY" \
+  --argjson context_limit "${CONTEXT_LIMIT:-131072}" \
+  --argjson output_limit "${OUTPUT_LIMIT:-8192}" \
   '{
     "$schema": $schema,
     provider: {
@@ -70,7 +113,15 @@ jq -n \
         npm: "@ai-sdk/openai-compatible",
         name: $provider_name,
         options: ({baseURL: $base_url} + (if $api_key != "" then {apiKey: $api_key} else {} end)),
-        models: {($model): {name: $model}}
+        models: {
+          ($model): {
+            name: $model,
+            limit: {
+              context: $context_limit,
+              output: $output_limit
+            }
+          }
+        }
       }
     },
     model: ($provider_id + "/" + $model)

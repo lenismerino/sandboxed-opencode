@@ -92,7 +92,16 @@ def main() -> None:
 
     prompt = f"""You are an expert AI software engineer. Analyze the logs and git history of a successful software development cycle. Extract the repeatable procedures, patterns, or commands into a reusable skill instruction.
 
-Follow this standard structure strictly:
+Follow this standard structure strictly, starting with YAML frontmatter:
+---
+name: {skill_name_clean}
+description: Concise description of this skill.
+version: 1.0.0
+category: coding
+tags: [workflow, automation]
+tools_required: [read_file, patch_file, run_command]
+---
+
 # Skill Name
 
 ## When To Use
@@ -117,10 +126,11 @@ Git Commit History:
     payload = {
         "model": llm_model,
         "messages": [
-            {"role": "system", "content": "You are a helpful coding assistant specialized in writing clear agent skills."},
+            {"role": "system", "content": "You are an expert AI engineer writing standardized agent skill files with YAML frontmatter."},
             {"role": "user", "content": prompt}
         ],
-        "temperature": 0.2
+        "temperature": 0.2,
+        "max_tokens": 4096
     }
 
     req_url = f"{llm_base_url.rstrip('/')}/chat/completions"
@@ -132,9 +142,12 @@ Git Commit History:
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=180) as resp:
             res_body = json.loads(resp.read().decode("utf-8"))
-            skill_content = res_body["choices"][0]["message"]["content"]
+            msg = res_body["choices"][0]["message"]
+            skill_content = msg.get("content") or ""
+            if not skill_content and msg.get("reasoning_content"):
+                skill_content = msg.get("reasoning_content")
     except urllib.error.URLError as e:
         print(f"Error calling LLM at {req_url}: {e.reason}", file=sys.stderr)
         sys.exit(1)
@@ -144,7 +157,7 @@ Git Commit History:
 
     SKILLS_DIR.mkdir(parents=True, exist_ok=True)
     out_file = SKILLS_DIR / f"{skill_name_clean}.md"
-    out_file.write_text(skill_content, encoding="utf-8")
+    out_file.write_text(skill_content.strip() + "\n", encoding="utf-8")
 
     print(f"Success! Crystallized skill written to: {out_file}")
 
