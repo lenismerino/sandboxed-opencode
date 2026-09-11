@@ -136,7 +136,11 @@ def stat_card(label: str, value: str, color: str = "#3b82f6") -> str:
 
 
 def build_html(
-    resources: list[dict], portscan: list[dict], summaries: list[dict], telemetry: list[dict] = None,
+    resources: list[dict],
+    portscan: list[dict],
+    summaries: list[dict],
+    telemetry: list[dict] = None,
+    agent_telemetry: dict = None,
 ) -> str:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     elapsed = compute_elapsed([resources, portscan, summaries])
@@ -162,8 +166,69 @@ def build_html(
         + "</div>"
     )
 
-    # -- Agent Telemetry --
-    if telemetry:
+    # -- Agent Telemetry & Unattended Supervisor Metrics --
+    if agent_telemetry:
+        tot_steps = agent_telemetry.get("total_steps", 0)
+        tps = agent_telemetry.get("token_velocity_tps", 0.0)
+        r_ratio = agent_telemetry.get("reasoning_ratio", 0.0)
+        ctx_tokens = agent_telemetry.get("current_context_tokens", 0)
+        max_ctx = agent_telemetry.get("max_context_length", 131072)
+        ctx_pct = agent_telemetry.get("context_utilization_pct", 0.0)
+        latencies = agent_telemetry.get("step_latencies", [])
+        avg_lat = agent_telemetry.get("average_latency", 0.0)
+        session_id = agent_telemetry.get("active_session_id", "default_session")
+
+        gauge_color = "#34d399" if ctx_pct < 65 else "#fbbf24" if ctx_pct < 85 else "#ef4444"
+
+        milestones_html = ""
+        for m in agent_telemetry.get("milestones", []):
+            st = m.get("status", "pending")
+            st_badge = (
+                '<span style="background:#064e3b;color:#34d399;padding:2px 6px;border-radius:4px;font-size:11px">Completed</span>'
+                if st == "completed"
+                else '<span style="background:#78350f;color:#fbbf24;padding:2px 6px;border-radius:4px;font-size:11px">In Progress</span>'
+                if st == "in_progress"
+                else '<span style="background:#1e1e2e;color:#888;padding:2px 6px;border-radius:4px;font-size:11px">Pending</span>'
+            )
+            milestones_html += f'<tr><td>{m.get("title","")}</td><td>{st_badge}</td><td style="color:#aaa">{m.get("details","")}</td></tr>'
+
+        tools_data = [(k, v) for k, v in agent_telemetry.get("tool_calls_counts", {}).items()]
+
+        sections.append(
+            f'<h2>Autonomous Agent & Harness Telemetry ({session_id})</h2>'
+            f'<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px">'
+            f'{stat_card("Steps", str(tot_steps), "#a78bfa")}'
+            f'{stat_card("Token Velocity", f"{tps:.1f} t/s", "#38bdf8")}'
+            f'{stat_card("Reasoning Ratio", f"{r_ratio * 100:.1f}%", "#c084fc")}'
+            f'{stat_card("Avg Latency", f"{avg_lat:.2f}s", "#fbbf24")}'
+            f'{stat_card("Context Used", f"{ctx_tokens:,} / {max_ctx:,}", gauge_color)}'
+            f'</div>'
+            f'<h3>Context Window Utilization ({ctx_pct:.1f}%)</h3>'
+            f'<div style="background:#1e1e2e;border-radius:6px;height:20px;overflow:hidden;margin-bottom:16px;border:1px solid #2a2a3a">'
+            f'<div style="background:{gauge_color};width:{min(100.0, max(2.0, ctx_pct))}%;height:100%"></div>'
+            f'</div>'
+        )
+
+        if milestones_html:
+            sections.append(
+                f'<h3>Phased Milestones & Supervision Checklist</h3>'
+                f'<table><thead><tr><th>Milestone</th><th>Status</th><th>Details</th></tr></thead>'
+                f'<tbody>{milestones_html}</tbody></table>'
+            )
+
+        if latencies:
+            sections.append(
+                f'<h3>Step Latency History (s)</h3>'
+                f"{svg_line_chart(latencies, color='#c084fc', y_label='Latency (s)')}"
+            )
+
+        if tools_data:
+            sections.append(
+                f'<h3>Tool Invocation Frequency</h3>'
+                f"{svg_bar_chart(tools_data, color='#38bdf8')}"
+            )
+
+    elif telemetry:
         total_steps = len(telemetry)
         latencies = [t.get("latency_seconds", 0.0) for t in telemetry]
         avg_lat = sum(latencies) / len(latencies) if latencies else 0.0
@@ -332,7 +397,16 @@ def main() -> None:
     summaries = read_jsonl(LOG_DIR / "security_summary.jsonl")
     telemetry = read_jsonl(LOG_DIR / "telemetry.jsonl")
 
-    html = build_html(resources, portscan, summaries, telemetry)
+    agent_telemetry = None
+    agent_telemetry_path = LOG_DIR / "agent_telemetry.json"
+    if agent_telemetry_path.exists():
+        try:
+            with open(agent_telemetry_path, "r", encoding="utf-8") as f:
+                agent_telemetry = json.load(f)
+        except Exception:
+            pass
+
+    html = build_html(resources, portscan, summaries, telemetry, agent_telemetry)
 
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(html)

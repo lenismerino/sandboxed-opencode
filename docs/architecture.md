@@ -58,12 +58,16 @@ Declarative JSON specifications (`config/model_profiles/*.json`) defining optima
 - **Qwen 3 4B**: Ultra-lightweight local profile for low-memory environments.
 - **Resilient Model Client (`harness/model_client.py`)**: Built-in exponential backoff retry loops, connection probing, and model pre-warming to handle GPU inference cold starts seamlessly.
 
-### Layer 4: Harness & Agent Loop Engine
-- **`ContextManager`**: Computes token usage, preserves critical anchors (system prompt + initial problem statement), and slides context history smoothly to fit within model boundaries.
+### Layer 4: Harness, Supervisor & Agent Loop Engine
+- **`ContextManager`**: Computes token usage, preserves critical anchors, and performs intelligent architectural compaction when token limits approach saturation.
+- **`SessionManager`**: Manages session state persistence, checkpoints, and automatic session rotation for long-running unattended tasks with executive handoffs.
+- **`LongTaskSupervisor`**: Multi-phase supervisor (`Discovery` -> `Architecture` -> `Implementation` -> `Verification` -> `Finalization`) driving unattended tasks across multiple rotated sessions without losing state.
+- **`TelemetryTracker`**: Records real-time token velocity (t/s), reasoning depth ratio, context headroom gauges, and step latencies to `logs/agent_telemetry.json`.
 - **`AgentLoopRunner`**: Multi-turn state machine orchestrating iterative coding, reasoning extraction, tool execution, and verification cycles.
 - **`TaskEvaluator`**: Automated quality gate validating formatting (`ruff format`), static typing (`mypy`), linting (`ruff check`), and test suites (`pytest`).
 
-### Layer 5: Extensibility (Skills, Tools, Plugins & Semantic Search)
+### Layer 5: Extensibility (Skills, Tools, Plugins & Harness MCP)
+- **Built-in Harness MCP Server (`scripts/harness_mcp.py`)**: Automatically exposes harness tools (`semantic_search`, `compact_context`, `evaluate_codebase`, `track_milestone`, `get_telemetry`) to OpenCode in `make run`.
 - **Skills (`skills/`)**: Categorized procedural guides with standardized YAML frontmatter metadata.
 - **Tools (`tools/`)**: Sandboxed operations with strict path traversal boundaries (`read_file`, `write_file`, `patch_file`, `grep_search`, `semantic_search`, `run_command`).
 - **Offline Semantic Search (`harness/embeddings.py`)**: Pure-Python standard library cosine similarity and SQLite vector caching (`.cache/semantic_index.db`) using local embedding models (e.g. `text-embedding-nomic-embed-text-v1.5`) without external vector DB dependencies.
@@ -75,8 +79,9 @@ Declarative JSON specifications (`config/model_profiles/*.json`) defining optima
 
 | Mode | Trigger | Description | Use Case |
 |---|---|---|---|
-| **Interactive** | `make run` / `make run-tui` | Web browser UI on port 3000 or terminal TUI | Human-in-the-loop development & iterative pairing |
-| **Autonomous** | `make run-autonomous` | Auto-approves all actions, executes markdown task end-to-end | Overnight features, refactors, and test generation |
+| **Interactive** | `make run` / `make run-tui` | Web browser UI on port 3000 with auto-injected harness MCP tools | Human-in-the-loop pairing & assisted coding |
+| **Supervisor** | `make supervisor` | Unattended multi-phase long task loop with session rotation | Deep features, complex refactors, and test coverage |
+| **Autonomous** | `make run-autonomous` | Auto-approves all actions, executes markdown task end-to-end | Overnight features and automated specification runs |
 | **Conductor** | `make run-conductor` | Headless OpenCode + MCP streamable HTTP bridge on port 8443 | External frontier AI agents orchestrating local sandbox |
 | **Harness** | `make harness` | Direct programmatic Python harness loop and automated evaluation | Benchmarking, continuous evaluation, regression testing |
 
@@ -86,6 +91,9 @@ Declarative JSON specifications (`config/model_profiles/*.json`) defining optima
 
 ```bash
 make quickstart   # Zero-config auto-discovery of LM Studio / Ollama endpoints
+make run          # Launch default OpenCode web interface with harness MCP tools
+make supervisor   # Run unattended long task loop with auto session rotation
+make dashboard    # Generate and view real-time visual telemetry dashboard
 make validate     # Validate .env and active model profile configuration
 make check        # Run full security auditor (secrets, seccomp, port bindings)
 make versions     # Inspect pinned software dependencies and active profile

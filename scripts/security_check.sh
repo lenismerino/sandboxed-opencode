@@ -67,7 +67,9 @@ for py_file in \
   scripts/model_profile.py \
   scripts/skills_manager.py \
   scripts/run_harness.py \
-  scripts/quickstart.py; do
+  scripts/quickstart.py \
+  scripts/harness_mcp.py \
+  scripts/run_supervisor.py; do
   python3 -m py_compile "$py_file"
 done
 

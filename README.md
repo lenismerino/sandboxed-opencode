@@ -14,11 +14,24 @@ The flagship configuration is tuned for **Google Gemma 4 E4B** running via LM St
   - 131,072 max context window with sliding history budgeting.
   - Native OpenAI function calling & strict JSON Schema structured output.
   - Dedicated reasoning token budget (4,096 tokens) and thought trace isolation.
+- **Enhanced Default Experience (`make run`) with Auto-Injected Harness Tools**:
+  - OpenCode Web UI automatically gains access to built-in harness tools via stdio MCP (`scripts/harness_mcp.py`):
+    - `semantic_search`: query project code conceptually using local embeddings.
+    - `compact_context`: checkpoint intermediate state and compact turns.
+    - `evaluate_codebase`: execute Ruff formatting/linting and Pytest in one command.
+    - `track_milestone`: update the real-time telemetry dashboard on subtask progress.
+  - Automatically provisions `.opencode/instructions.md` with structured reasoning instructions for Gemma 4.
+- **Unattended Long Task Supervisor (`make supervisor` & `harness/supervisor.py`)**:
+  - Phased goal execution (`Discovery` -> `Architecture & Plan` -> `Implementation` -> `Verification & Testing` -> `Finalization`).
+  - Proactive context compaction at >80% utilization.
+  - Automatic session rotation at >90% utilization or phase boundaries, archiving previous sessions to `.cache/sessions/` and generating structured **Executive Session Handoffs**.
+- **Observability, Metrics & Telemetry Dashboard (`make dashboard` & `scripts/dashboard.py`)**:
+  - Visual terminal and web dashboard displaying token generation velocity (`t/s`), reasoning ratio, context window utilization gauge, step latencies, and milestone checklists.
 - **Harness & Agent Loops Engine (`harness/`)**:
   - Multi-turn autonomous agent loop runner (`AgentLoopRunner`).
-  - Context budget manager (`ContextManager`) with sliding history pruning.
+  - Context budget manager (`ContextManager`) with sliding history pruning and intelligent compaction.
   - Automated project evaluation and testing quality gate (`TaskEvaluator`).
-  - Programmatic task runner CLI (`scripts/run_harness.py`).
+  - Programmatic task runner CLI (`scripts/run_harness.py` and `scripts/run_supervisor.py`).
 - **Flexible Network & Endpoint Routing**:
   - `LLM_HOST`: support connecting to private LAN model endpoints (e.g. `192.168.1.3:1234`) without granting unrestricted WAN egress.
   - Restricted internal network mode (`make run-restricted`).
@@ -128,7 +141,8 @@ Verifies `/models` discovery, basic completion with reasoning trace, native tool
 
 | Mode | Command | Description |
 |---|---|---|
-| **Interactive Web** | `make run` | Browser UI at `http://localhost:3000` |
+| **Interactive Web** | `make run` | Browser UI at `http://localhost:3000` with auto-injected harness MCP tools |
+| **Supervisor** | `make supervisor` | Unattended multi-phase long task loop with session rotation |
 | **Terminal TUI** | `make run-tui` | Terminal interface directly in your shell |
 | **Autonomous Task** | `make run-autonomous` | Executes `TASK_FILE` specification end-to-end |
 | **Conductor Mode** | `make run-conductor` | Starts MCP bridge on port 8443 for external agents |
@@ -195,6 +209,9 @@ python3 scripts/crystallize_skill.py my_workflow
 
 ```bash
 make quickstart   # Zero-config auto-discovery of LM Studio or Ollama
+make run          # Launch default OpenCode web interface with harness MCP tools
+make supervisor   # Run unattended long task loop with auto session rotation
+make dashboard    # Generate and view real-time visual telemetry dashboard
 make validate     # Validate configuration, ports, and model profile
 make check        # Run full security auditor (secrets, seccomp, port bindings)
 make versions     # Display pinned software versions and active model profile
@@ -213,6 +230,8 @@ make stop         # Stop all services gracefully
 - [Model Profiles Reference](file:///Users/mauricio/Coding/sandboxed-opencode/docs/model_profiles.md)
 - [Harness & Agent Loops Guide](file:///Users/mauricio/Coding/sandboxed-opencode/docs/harness_and_loops.md)
 - [Skills & Plugins Guide](file:///Users/mauricio/Coding/sandboxed-opencode/docs/skills_and_plugins.md)
+- [Recipe: Default Experience (`make run`) & Harness](file:///Users/mauricio/Coding/sandboxed-opencode/docs/recipes/default_experience_and_harness.md)
+- [Recipe: Unattended Long Tasks & Session Rotation](file:///Users/mauricio/Coding/sandboxed-opencode/docs/recipes/unattended_long_tasks.md)
 - [Recipe: Zero-Config Auto-Discovery Quickstart](file:///Users/mauricio/Coding/sandboxed-opencode/docs/recipes/zero_config_quickstart.md)
 - [Recipe: Local Offline Semantic Code Search](file:///Users/mauricio/Coding/sandboxed-opencode/docs/recipes/semantic_code_search.md)
 - [Recipe: LM Studio + Gemma 4 E4B](file:///Users/mauricio/Coding/sandboxed-opencode/docs/recipes/gemma4_lmstudio.md)
