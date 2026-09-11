@@ -114,14 +114,22 @@ External tools may be available via MCP (Model Context Protocol) servers configu
 - Use MCP tools for specialized integrations: databases, external APIs, search, or services not accessible through standard shell commands.
 - Do not assume MCP tools are available. Check for their presence before relying on them.
 
-## Skills
+## Model Profiles & Reasoning Directives
 
-The repository may contain a `skills/` directory with Markdown files that provide domain-specific procedures, constraints, or recipes.
+This sandbox utilizes **Model Profiles** (defined in `config/model_profiles/`) to tune the interaction parameters for specific open-weights models such as **Google Gemma 4 E4B** or **Qwen 3.5**.
 
-1. At the start of each development cycle, list `skills/*.md` if the directory exists.
-2. Read only the skill files relevant to the current task.
-3. Treat skill files as project guidance subordinate to this `AGENTS.md` and explicit user instructions.
-4. If a skill conflicts with the sandbox security model, follow the stricter security rule and document the conflict.
+When operating with a reasoning model:
+1. **Leverage Internal Reasoning**: Use the thinking phase to map existing file dependencies, construct precise diffs, and self-check imports before emitting code or tool calls.
+2. **Context Window Respect**: Large context windows (e.g. 131K for Gemma 4) enable handling substantial codebases, but do not needlessly echo large file contents. Inspect only what is relevant.
+3. **Structured Outputs & Schema Adherence**: Function arguments and JSON outputs must strictly adhere to provided schemas.
+
+## Skills & Organizational System
+
+The sandbox organizes skills in `skills/<category>/<skill_name>/SKILL.md` (e.g. `coding`, `testing`, `security`, `orchestration`).
+
+1. Inspect available skills using `./scripts/skills_manager.py list` or by viewing `skills/README.md`.
+2. Activate domain skills when their trigger conditions match your current development phase.
+3. When concluding a successful, non-trivial development workflow, crystallize the procedure using `python3 /home/agent/app/crystallize_skill.py <skill_name>`.
 
 ## Final Handoff
 

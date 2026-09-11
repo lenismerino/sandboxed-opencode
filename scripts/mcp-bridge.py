@@ -213,6 +213,11 @@ TOOLS = [
         "description": "List all crystallized skills in the project with descriptions.",
         "inputSchema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "get_model_profile",
+        "description": "Get details about the active model profile (context window, sampling, reasoning capabilities).",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
 ]
 
 
@@ -567,6 +572,21 @@ def tool_list_skills(arguments: dict) -> str:
         return f"Error listing skills: {e}"
 
 
+def tool_get_model_profile(arguments: dict) -> str:
+    profile_name = os.environ.get("MODEL_PROFILE", "gemma-4-e4b")
+    candidates = [
+        Path(f"/home/agent/app/config/model_profiles/{profile_name}.json"),
+        Path(f"config/model_profiles/{profile_name}.json"),
+    ]
+    for p in candidates:
+        if p.exists():
+            try:
+                return p.read_text(encoding="utf-8")
+            except Exception as e:
+                return f"Error reading profile: {e}"
+    return f"Active model profile: {profile_name} (details file not found)."
+
+
 TOOL_HANDLERS = {
     "delegate_task": tool_delegate_task,
     "read_project_file": tool_read_project_file,
@@ -581,6 +601,7 @@ TOOL_HANDLERS = {
     "crystallize_skill": tool_crystallize_skill,
     "read_project_log": tool_read_project_log,
     "list_skills": tool_list_skills,
+    "get_model_profile": tool_get_model_profile,
 }
 
 

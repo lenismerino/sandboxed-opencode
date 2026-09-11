@@ -1,0 +1,65 @@
+{
+  "$schema": "../model-profile-schema.json",
+  "profile_name": "gemma-4-e4b",
+  "display_name": "Google Gemma 4 E4B (LM Studio)",
+  "model_id": "google/gemma-4-e4b",
+  "provider": "lm_studio",
+  "default_base_url": "http://192.168.1.3:1234/v1",
+  "architecture": "gemma4",
+  "family": "gemma",
+  "quantization": "Q4_K_M",
+  "description": "Google Gemma 4 E4B reasoning and multimodal vision-language model with native tool-calling and 131K context window.",
+  "context_window": {
+    "max_context_length": 131072,
+    "reserved_completion_tokens": 8192,
+    "effective_prompt_limit": 122880,
+    "truncation_strategy": "sliding_window"
+  },
+  "sampling": {
+    "temperature": 0.2,
+    "top_p": 0.95,
+    "top_k": 40,
+    "min_p": 0.05,
+    "repeat_penalty": 1.05,
+    "presence_penalty": 0.0,
+    "frequency_penalty": 0.0
+  },
+  "reasoning": {
+    "supported": true,
+    "field": "reasoning_content",
+    "budget_tokens": 4096,
+    "show_thinking": true,
+    "extract_tags": ["<thought>", "<thinking>", "Thinking Process:"]
+  },
+  "tool_calling": {
+    "supported": true,
+    "format": "openai_function",
+    "strict": true,
+    "parallel_tool_calls": false,
+    "validate_schemas": true
+  },
+  "structured_output": {
+    "supported": true,
+    "format": "json_schema",
+    "strict": true
+  },
+  "speculative_decoding": {
+    "supported": true,
+    "enabled": false,
+    "draft_model": null,
+    "speculation_length": 4
+  },
+  "system_prompt": "You are an expert autonomous software engineer operating within a hardened Debian Linux container sandbox. You write robust, clean, typed, and well-tested code.\n\nOperating Principles:\n1. Reasoning & Planning: Use your internal reasoning phase to analyze requirements, inspect existing files, and plan atomic changes before taking action.\n2. Non-Hallucination: Never guess imports, function signatures, or filesystem structures. Always inspect files first.\n3. Minimal Atomic Edits: Make targeted, surgical edits rather than rewriting entire files.\n4. Tool Calling: Call available tools accurately using valid JSON conforming strictly to their schema.\n5. Self-Verification: Immediately run formatting (ruff format), linting (ruff check), and tests (pytest) to verify all changes.\n6. Conciseness: Avoid conversational pleasantries. Provide factual, structured summaries of actions and test outcomes.",
+  "harness_profile": {
+    "sliding_window": true,
+    "preserved_system_turns": 1,
+    "preserved_initial_turns": 1,
+    "recent_turns_budget": 20,
+    "prune_threshold_tokens": 120000,
+    "max_steps_per_task": 35,
+    "tool_retry_limit": 3,
+    "error_recovery_prompt": "Your last tool call resulted in an error or invalid arguments. Analyze the error traceback carefully and call the tool with corrected parameters.",
+    "temperature_fallback_step": 0.1,
+    "timeout_seconds": 300
+  }
+}

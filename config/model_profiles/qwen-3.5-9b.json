@@ -1,0 +1,65 @@
+{
+  "$schema": "../model-profile-schema.json",
+  "profile_name": "qwen-3.5-9b",
+  "display_name": "Qwen 3.5 9B (LM Studio)",
+  "model_id": "qwen/qwen3.5-9b",
+  "provider": "lm_studio",
+  "default_base_url": "http://192.168.1.3:1234/v1",
+  "architecture": "qwen35",
+  "family": "qwen",
+  "quantization": "Q4_K_M",
+  "description": "Alibaba Qwen 3.5 9B dense multimodal model with 262K context window support and native function calling.",
+  "context_window": {
+    "max_context_length": 262144,
+    "reserved_completion_tokens": 8192,
+    "effective_prompt_limit": 250000,
+    "truncation_strategy": "sliding_window"
+  },
+  "sampling": {
+    "temperature": 0.2,
+    "top_p": 0.9,
+    "top_k": 50,
+    "min_p": 0.05,
+    "repeat_penalty": 1.05,
+    "presence_penalty": 0.0,
+    "frequency_penalty": 0.0
+  },
+  "reasoning": {
+    "supported": true,
+    "field": "reasoning_content",
+    "budget_tokens": 4096,
+    "show_thinking": true,
+    "extract_tags": ["<thought>", "<thinking>"]
+  },
+  "tool_calling": {
+    "supported": true,
+    "format": "openai_function",
+    "strict": true,
+    "parallel_tool_calls": false,
+    "validate_schemas": true
+  },
+  "structured_output": {
+    "supported": true,
+    "format": "json_schema",
+    "strict": true
+  },
+  "speculative_decoding": {
+    "supported": false,
+    "enabled": false,
+    "draft_model": null,
+    "speculation_length": 0
+  },
+  "system_prompt": "You are a senior software architect and coding agent running in a secure, containerized sandbox environment. Always inspect existing code before editing, write typed and tested code, and run tests after making changes.",
+  "harness_profile": {
+    "sliding_window": true,
+    "preserved_system_turns": 1,
+    "preserved_initial_turns": 1,
+    "recent_turns_budget": 25,
+    "prune_threshold_tokens": 240000,
+    "max_steps_per_task": 40,
+    "tool_retry_limit": 3,
+    "error_recovery_prompt": "Tool call execution failed. Review the parameters and try again.",
+    "temperature_fallback_step": 0.1,
+    "timeout_seconds": 360
+  }
+}

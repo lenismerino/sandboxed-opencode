@@ -1,5 +1,5 @@
-ARG PYTHON_BASE_IMAGE=python:3.13.13-slim-bookworm
-ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.11.21
+ARG PYTHON_BASE_IMAGE=python:3.13.15-slim-bookworm
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.12.13
 
 FROM ${UV_IMAGE} AS uv_source
 
@@ -12,11 +12,11 @@ FROM ${PYTHON_BASE_IMAGE}
 ARG HOST_UID=1000
 ARG HOST_GID=1000
 ARG NODE_MAJOR=22
-ARG NODE_VERSION=22.22.2-1nodesource1
-ARG OPENCODE_VERSION=1.17.8
-ARG GH_VERSION=2.92.0
-ARG GH_AMD64_SHA256=8f8212b1a9cec261a8839e0893168f50d3fc70f095da257feef4229234cefdf8
-ARG GH_ARM64_SHA256=34d620b7c884774ed86236541535170889fda0b99aafbdab8b69c7d458b5ca6b
+ARG NODE_VERSION=22.23.2-1nodesource1
+ARG OPENCODE_VERSION=1.18.30
+ARG GH_VERSION=2.100.0
+ARG GH_AMD64_SHA256=698c8d88cc19cc92bfe96bad58d10b2a5b274c52433d6dc57799c81f6139d5fc
+ARG GH_ARM64_SHA256=33ccd2ad7ce639c927e1cb209e36555b0e1fbb89f7a38239c0568040ec758612
 ARG TARGETARCH
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -116,7 +116,7 @@ RUN mkdir -p /home/agent/projects \
              /home/agent/app \
     && chown -R agent:${HOST_GID} /home/agent
 
-# 6. Copy the entrypoint script (using just 'agent' defaults to their primary group)
+# 6. Copy the entrypoint script, harness, plugins, tools, model profiles, and helper scripts
 COPY --chown=agent entrypoint.sh /home/agent/app/entrypoint.sh
 COPY --chown=agent scripts/monitor-ports.sh /home/agent/app/monitor-ports.sh
 COPY --chown=agent scripts/monitor-resources.sh /home/agent/app/monitor-resources.sh
@@ -125,7 +125,14 @@ COPY --chown=agent scripts/dashboard.py /home/agent/app/dashboard.py
 COPY --chown=agent scripts/dashboard-server.sh /home/agent/app/dashboard-server.sh
 COPY --chown=agent scripts/mcp-bridge.py /home/agent/app/mcp-bridge.py
 COPY --chown=agent scripts/crystallize_skill.py /home/agent/app/crystallize_skill.py
-RUN chmod +x /home/agent/app/entrypoint.sh /home/agent/app/monitor-*.sh /home/agent/app/dashboard-server.sh /home/agent/app/crystallize_skill.py
+COPY --chown=agent scripts/model_profile.py /home/agent/app/model_profile.py
+COPY --chown=agent scripts/skills_manager.py /home/agent/app/skills_manager.py
+COPY --chown=agent scripts/run_harness.py /home/agent/app/run_harness.py
+COPY --chown=agent harness /home/agent/app/harness
+COPY --chown=agent tools /home/agent/app/tools
+COPY --chown=agent plugins /home/agent/app/plugins
+COPY --chown=agent config/model_profiles /home/agent/app/config/model_profiles
+RUN chmod +x /home/agent/app/entrypoint.sh /home/agent/app/monitor-*.sh /home/agent/app/dashboard-server.sh /home/agent/app/*.py
 
 # 7. Lock down the container to the non-root user
 USER agent

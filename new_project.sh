@@ -35,17 +35,24 @@ mkdir -p "$PROJECT_DIR/docs" "$PROJECT_DIR/artifacts" "$PROJECT_DIR/logs" "$PROJ
 touch "$PROJECT_DIR/src/$PKG_NAME/__init__.py"
 
 # --- Dynamic LLM Routing Injection (Always Runs) ---
-if [ "$LLM_SOURCE" = "lm_studio" ]; then
-  INJECT_URL="http://host.docker.internal:${LLM_PORT:-1234}/v1"
+if [ -n "${MODEL_PROFILE:-}" ] && [ -f "config/model_profiles/${MODEL_PROFILE}.json" ]; then
+  PROFILE_FILE="config/model_profiles/${MODEL_PROFILE}.json"
+  INJECT_MODEL="$(jq -r '.model_id' "$PROFILE_FILE")"
+  LLM_HOST_VAL="${LLM_HOST:-host.docker.internal}"
+  INJECT_URL="http://${LLM_HOST_VAL}:${LLM_PORT:-1234}/v1"
+elif [ "$LLM_SOURCE" = "lm_studio" ]; then
+  LLM_HOST_VAL="${LLM_HOST:-host.docker.internal}"
+  INJECT_URL="http://${LLM_HOST_VAL}:${LLM_PORT:-1234}/v1"
   INJECT_MODEL="$LM_STUDIO_MODEL"
 elif [ "$LLM_SOURCE" = "fastflow_amd" ]; then
-  INJECT_URL="http://host.docker.internal:${LLM_PORT:-52625}/v1"
+  LLM_HOST_VAL="${LLM_HOST:-host.docker.internal}"
+  INJECT_URL="http://${LLM_HOST_VAL}:${LLM_PORT:-52625}/v1"
   INJECT_MODEL="$FASTFLOW_MODEL"
 elif [ "$LLM_SOURCE" = "ollama_docker" ]; then
   INJECT_URL="http://opencode-llm:11434/v1"
   INJECT_MODEL="$OLLAMA_MODEL"
 else
-  echo "Error: Invalid LLM_SOURCE '${LLM_SOURCE:-}' in .env"
+  echo "Error: Invalid LLM_SOURCE or MODEL_PROFILE in .env"
   exit 1
 fi
 
@@ -53,6 +60,7 @@ cat <<EOF > "$PROJECT_DIR/.env"
 # Dynamic Configuration injected by xl-sandboxed-opencode
 LLM_BASE_URL="${INJECT_URL}"
 LLM_MODEL_NAME="${INJECT_MODEL}"
+MODEL_PROFILE="${MODEL_PROFILE:-}"
 APP_PORT="${APP_PORT:-7860}"
 EOF
 # ------------------------------------------

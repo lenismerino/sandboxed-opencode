@@ -40,9 +40,25 @@ When enabled via `.env`, background monitoring scripts run inside the container:
 - **Resource snapshots** (`RESOURCE_MONITOR_ENABLED`) — captures process and memory state periodically.
 - **Security reports** (`AUTOLOG_ENABLED`) — aggregates monitoring data into hourly summaries.
 
-## Network Egress
+## Network Egress & LLM Endpoint Routing
 
-By default, the workspace container has full outbound internet access (required for `uv add`, `pip install`, etc.). For hardened deployments where the agent should only reach the local LLM endpoint, use `make run-restricted` to switch to an internal-only Docker network.
+The sandbox supports flexible LLM network routing while maintaining strict isolation:
+- **Local Host**: Defaults to `host.docker.internal` for collocated LM Studio or FastFlow instances.
+- **LAN Model Endpoints**: Allows setting `LLM_HOST` (e.g. `192.168.1.3`) to access dedicated inference servers running Gemma 4 E4B, Qwen, or Ollama over private LAN without granting public internet egress.
+- **Restricted Mode (`make run-restricted`)**: Isolates the container on an internal bridge network (`agent_network_restricted`) with no WAN egress, while preserving local LLM connectivity.
+
+## Tool Traversal & Sandbox Safeguards
+
+All filesystem and command execution tools in `tools/registry.py` and `scripts/mcp-bridge.py` enforce strict boundary invariants:
+- **Path Traversal Shield**: Paths are strictly resolved against the active project root; traversal attempts (`../`, absolute paths escaping `/home/agent/projects`) are blocked with a `PermissionError`.
+- **Command Sanitization**: Destructive system calls and shell bombs are parsed and rejected prior to execution.
+- **Strict Execution Timeouts**: Shell executions are bounded by timeouts (default 120s) to prevent frozen agent loops.
+
+## Secret Detection & Credential Protection
+
+The automated security auditor (`scripts/security_check.sh`) continuously scans commits and configurations:
+- Detects AWS keys, GitHub personal access tokens, and private keys (`-----BEGIN PRIVATE KEY-----`).
+- Expanded strict mode detects JWTs, Slack tokens, HuggingFace tokens (`hf_`), Anthropic API keys (`sk-ant-`), and Google AI keys (`AIza`).
 
 ## MCP Security Considerations
 

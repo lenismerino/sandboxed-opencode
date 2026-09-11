@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ModelProfile",
+  "description": "Schema definition for sandboxed-opencode model profiles",
+  "type": "object",
+  "required": [
+    "profile_name",
+    "display_name",
+    "model_id",
+    "provider",
+    "context_window",
+    "sampling",
+    "reasoning",
+    "tool_calling",
+    "system_prompt",
+    "harness_profile"
+  ],
+  "properties": {
+    "profile_name": { "type": "string" },
+    "display_name": { "type": "string" },
+    "model_id": { "type": "string" },
+    "provider": { "type": "string", "enum": ["lm_studio", "fastflow_amd", "ollama_docker", "openai_compatible"] },
+    "default_base_url": { "type": "string" },
+    "architecture": { "type": "string" },
+    "family": { "type": "string" },
+    "quantization": { "type": "string" },
+    "description": { "type": "string" },
+    "context_window": {
+      "type": "object",
+      "required": ["max_context_length", "reserved_completion_tokens"],
+      "properties": {
+        "max_context_length": { "type": "integer", "minimum": 1024 },
+        "reserved_completion_tokens": { "type": "integer", "minimum": 256 },
+        "effective_prompt_limit": { "type": "integer" },
+        "truncation_strategy": { "type": "string", "enum": ["sliding_window", "summary", "truncate_head"] }
+      }
+    },
+    "sampling": {
+      "type": "object",
+      "required": ["temperature", "top_p"],
+      "properties": {
+        "temperature": { "type": "number", "minimum": 0.0, "maximum": 2.0 },
+        "top_p": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "top_k": { "type": "integer", "minimum": 0 },
+        "min_p": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "repeat_penalty": { "type": "number", "minimum": 0.0 },
+        "presence_penalty": { "type": "number" },
+        "frequency_penalty": { "type": "number" }
+      }
+    },
+    "reasoning": {
+      "type": "object",
+      "required": ["supported"],
+      "properties": {
+        "supported": { "type": "boolean" },
+        "field": { "type": "string" },
+        "budget_tokens": { "type": "integer" },
+        "show_thinking": { "type": "boolean" },
+        "extract_tags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "tool_calling": {
+      "type": "object",
+      "required": ["supported", "format"],
+      "properties": {
+        "supported": { "type": "boolean" },
+        "format": { "type": "string", "enum": ["openai_function", "raw_xml", "python_interpreter"] },
+        "strict": { "type": "boolean" },
+        "parallel_tool_calls": { "type": "boolean" },
+        "validate_schemas": { "type": "boolean" }
+      }
+    },
+    "structured_output": {
+      "type": "object",
+      "properties": {
+        "supported": { "type": "boolean" },
+        "format": { "type": "string" },
+        "strict": { "type": "boolean" }
+      }
+    },
+    "speculative_decoding": {
+      "type": "object",
+      "properties": {
+        "supported": { "type": "boolean" },
+        "enabled": { "type": "boolean" },
+        "draft_model": { "type": ["string", "null"] },
+        "speculation_length": { "type": "integer" }
+      }
+    },
+    "system_prompt": { "type": "string" },
+    "harness_profile": {
+      "type": "object",
+      "properties": {
+        "sliding_window": { "type": "boolean" },
+        "preserved_system_turns": { "type": "integer" },
+        "preserved_initial_turns": { "type": "integer" },
+        "recent_turns_budget": { "type": "integer" },
+        "prune_threshold_tokens": { "type": "integer" },
+        "max_steps_per_task": { "type": "integer" },
+        "tool_retry_limit": { "type": "integer" },
+        "error_recovery_prompt": { "type": "string" },
+        "temperature_fallback_step": { "type": "number" },
+        "timeout_seconds": { "type": "integer" }
+      }
+    }
+  }
+}

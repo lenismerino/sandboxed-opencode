@@ -1,0 +1,65 @@
+{
+  "$schema": "../model-profile-schema.json",
+  "profile_name": "qwen-3-4b",
+  "display_name": "Qwen 3 4B (Local/Ollama)",
+  "model_id": "qwen3:4b",
+  "provider": "ollama_docker",
+  "default_base_url": "http://opencode-llm:11434/v1",
+  "architecture": "qwen3",
+  "family": "qwen",
+  "quantization": "Q4_0",
+  "description": "Lightweight 4B parameter model for fast local iteration in constrained hardware environments.",
+  "context_window": {
+    "max_context_length": 32768,
+    "reserved_completion_tokens": 4096,
+    "effective_prompt_limit": 28672,
+    "truncation_strategy": "sliding_window"
+  },
+  "sampling": {
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "top_k": 40,
+    "min_p": 0.0,
+    "repeat_penalty": 1.1,
+    "presence_penalty": 0.0,
+    "frequency_penalty": 0.0
+  },
+  "reasoning": {
+    "supported": true,
+    "field": "reasoning_content",
+    "budget_tokens": 2048,
+    "show_thinking": true,
+    "extract_tags": ["<thought>", "<thinking>"]
+  },
+  "tool_calling": {
+    "supported": true,
+    "format": "openai_function",
+    "strict": false,
+    "parallel_tool_calls": false,
+    "validate_schemas": true
+  },
+  "structured_output": {
+    "supported": true,
+    "format": "json_schema",
+    "strict": false
+  },
+  "speculative_decoding": {
+    "supported": false,
+    "enabled": false,
+    "draft_model": null,
+    "speculation_length": 0
+  },
+  "system_prompt": "You are a concise software engineering agent running inside a sandboxed Linux environment. Work incrementally, write typed code, and execute verification commands after each step.",
+  "harness_profile": {
+    "sliding_window": true,
+    "preserved_system_turns": 1,
+    "preserved_initial_turns": 1,
+    "recent_turns_budget": 12,
+    "prune_threshold_tokens": 28000,
+    "max_steps_per_task": 25,
+    "tool_retry_limit": 3,
+    "error_recovery_prompt": "The tool call failed. Check parameters and retry.",
+    "temperature_fallback_step": 0.1,
+    "timeout_seconds": 180
+  }
+}
